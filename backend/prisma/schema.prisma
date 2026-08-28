@@ -1,0 +1,870 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ----------------------------------------------------
+// ENUMS
+// ----------------------------------------------------
+
+enum TenantType {
+  GYM
+  FITNESS_CENTER
+  PERSONAL_TRAINER
+  NUTRITIONIST
+  CORPORATE_WELLNESS
+}
+
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  TRAINER
+  NUTRITIONIST
+  CUSTOMER
+}
+
+enum TenantUserStatus {
+  ACTIVE
+  INACTIVE
+  INVITED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum FitnessGoal {
+  WEIGHT_LOSS
+  MUSCLE_GAIN
+  MAINTENANCE
+  GENERAL_FITNESS
+  STRENGTH
+  ENDURANCE
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHTLY_ACTIVE
+  MODERATELY_ACTIVE
+  VERY_ACTIVE
+  EXTRA_ACTIVE
+}
+
+enum WorkoutExperience {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum DietaryPreference {
+  VEGETARIAN
+  NON_VEGETARIAN
+  VEGAN
+  EGGETARIAN
+  PESCATARIAN
+  KETO
+  PALEO
+}
+
+enum PlanStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  ASSIGNED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum MealType {
+  BREAKFAST
+  MORNING_SNACK
+  LUNCH
+  EVENING_SNACK
+  DINNER
+  PRE_WORKOUT
+  POST_WORKOUT
+  OTHER
+}
+
+enum ExerciseCategory {
+  STRENGTH
+  CARDIO
+  HYPERTROPHY
+  CALISTHENICS
+  MOBILITY
+  STRETCHING
+  OTHER
+}
+
+enum MuscleGroup {
+  CHEST
+  BACK
+  LEGS
+  SHOULDERS
+  BICEPS
+  TRICEPS
+  FOREARMS
+  CORE
+  FULL_BODY
+  CARDIO
+}
+
+enum Equipment {
+  BARBELL
+  DUMBBELL
+  KETTLEBELL
+  CABLE
+  MACHINE
+  BODYWEIGHT
+  RESISTANCE_BAND
+  CARDIO_MACHINE
+  OTHER
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+}
+
+// ----------------------------------------------------
+// CORE TENANT & USER MODELS
+// ----------------------------------------------------
+
+model Tenant {
+  id          String         @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String         @unique
+  type        TenantType     @default(GYM)
+  status      TenantStatus   @default(ACTIVE)
+  logoUrl     String?        @map("logo_url")
+  address     String?
+  phone       String?
+  email       String?
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  settings          TenantSettings?
+  tenantUsers       TenantUser[]
+  customerProfiles  CustomerProfile[]
+  trainerProfiles   TrainerProfile[]
+  nutritionistProfiles NutritionistProfile[]
+  dietPlans         DietPlan[]
+  workoutPlans      WorkoutPlan[]
+  foodLogs          FoodLog[]
+  workoutLogs       WorkoutLog[]
+  weightLogs        WeightLog[]
+  bodyMeasurements  BodyMeasurement[]
+  waterLogs         WaterLog[]
+  progressPhotos    ProgressPhoto[]
+  aiConversations   AiConversation[]
+  subscriptions     Subscription[]
+  auditLogs         AuditLog[]
+  customFoodItems   FoodItem[]
+  customExercises   Exercise[]
+  nutritionTargets  NutritionTarget[]
+
+  @@map("tenants")
+}
+
+model TenantSettings {
+  id                          String   @id @default(uuid()) @db.Uuid
+  tenantId                    String   @unique @map("tenant_id") @db.Uuid
+  allowedAiPlansPerMonth      Int      @default(100) @map("allowed_ai_plans_per_month")
+  requireTrainerApproval      Boolean  @default(true) @map("require_trainer_approval")
+  requireNutritionistApproval Boolean  @default(true) @map("require_nutritionist_approval")
+  primaryColor                String   @default("#10B981") @map("primary_color")
+  waterDefaultTargetMl        Int      @default(2500) @map("water_default_target_ml")
+  supportedCuisines           String[] @default(["Indian", "Continental", "Mediterranean", "Asian"]) @map("supported_cuisines")
+  createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_settings")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String?   @map("password_hash")
+  fullName     String    @map("full_name")
+  phone        String?
+  avatarUrl    String?   @map("avatar_url")
+  isSuperAdmin Boolean   @default(false) @map("is_super_admin")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenantUsers          TenantUser[]
+  customerProfile      CustomerProfile?
+  trainerProfile       TrainerProfile?
+  nutritionistProfile  NutritionistProfile?
+  assignedAsTrainer    CustomerProfile[]    @relation("TrainerAssignment")
+  assignedAsNutritionist CustomerProfile[]  @relation("NutritionistAssignment")
+  createdDietPlans     DietPlan[]           @relation("DietPlanCreator")
+  createdWorkoutPlans  WorkoutPlan[]        @relation("WorkoutPlanCreator")
+  foodLogs             FoodLog[]
+  workoutLogs          WorkoutLog[]
+  weightLogs           WeightLog[]
+  bodyMeasurements     BodyMeasurement[]
+  waterLogs            WaterLog[]
+  progressPhotos       ProgressPhoto[]
+  aiConversations      AiConversation[]
+  auditLogs            AuditLog[]
+  nutritionTargets     NutritionTarget[]
+
+  @@map("users")
+}
+
+model TenantUser {
+  id        String           @id @default(uuid()) @db.Uuid
+  tenantId  String           @map("tenant_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  role      UserRole         @default(CUSTOMER)
+  status    TenantUserStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  customerProfile     CustomerProfile?
+  trainerProfile      TrainerProfile?
+  nutritionistProfile NutritionistProfile?
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tenant_users")
+}
+
+// ----------------------------------------------------
+// PROFILES (CUSTOMER, TRAINER, NUTRITIONIST)
+// ----------------------------------------------------
+
+model CustomerProfile {
+  id                    String            @id @default(uuid()) @db.Uuid
+  tenantId              String            @map("tenant_id") @db.Uuid
+  userId                String            @unique @map("user_id") @db.Uuid
+  tenantUserId          String            @unique @map("tenant_user_id") @db.Uuid
+  assignedTrainerId     String?           @map("assigned_trainer_id") @db.Uuid
+  assignedNutritionistId String?          @map("assigned_nutritionist_id") @db.Uuid
+  
+  // Physical Info
+  age                   Int?
+  gender                Gender?
+  heightCm              Float?            @map("height_cm")
+  currentWeightKg       Float?            @map("current_weight_kg")
+  targetWeightKg        Float?            @map("target_weight_kg")
+
+  // Fitness Goals & Experience
+  fitnessGoal           FitnessGoal?      @map("fitness_goal")
+  activityLevel         ActivityLevel?    @map("activity_level")
+  workoutExperience     WorkoutExperience? @map("workout_experience")
+  workoutDaysPerWeek    Int?              @default(4) @map("workout_days_per_week")
+  workoutDurationMinutes Int?             @default(45) @map("workout_duration_minutes")
+  availableEquipment    String[]          @default(["Dumbbells", "Bodyweight"]) @map("available_equipment")
+
+  // Dietary Preferences
+  dietaryPreference     DietaryPreference? @map("dietary_preference")
+  allergies             String[]          @default([])
+  foodDislikes          String[]          @default([]) @map("food_dislikes")
+  preferredCuisines     String[]          @default(["Indian"]) @map("preferred_cuisines")
+  mealsPerDay           Int?              @default(4) @map("meals_per_day")
+  dailyFoodBudget       Float?            @map("daily_food_budget")
+  sleepDurationHours    Float?            @default(7.5) @map("sleep_duration_hours")
+  dailyWaterTargetMl    Int?              @default(2500) @map("daily_water_target_ml")
+
+  // Onboarding Status
+  isOnboardingCompleted Boolean           @default(false) @map("is_onboarding_completed")
+  onboardingStep        Int               @default(1) @map("onboarding_step")
+
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantUser           TenantUser         @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  assignedTrainer      User?              @relation("TrainerAssignment", fields: [assignedTrainerId], references: [id])
+  assignedNutritionist User?              @relation("NutritionistAssignment", fields: [assignedNutritionistId], references: [id])
+  dietPlans            DietPlan[]
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([assignedTrainerId])
+  @@index([assignedNutritionistId])
+  @@map("customer_profiles")
+}
+
+model TrainerProfile {
+  id                 String     @id @default(uuid()) @db.Uuid
+  tenantId           String     @map("tenant_id") @db.Uuid
+  userId             String     @unique @map("user_id") @db.Uuid
+  tenantUserId       String     @unique @map("tenant_user_id") @db.Uuid
+  specializations    String[]   @default([])
+  certifications     String[]   @default([])
+  bio                String?
+  yearsOfExperience  Int?       @default(0) @map("years_of_experience")
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantUser TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("trainer_profiles")
+}
+
+model NutritionistProfile {
+  id            String     @id @default(uuid()) @db.Uuid
+  tenantId      String     @map("tenant_id") @db.Uuid
+  userId        String     @unique @map("user_id") @db.Uuid
+  tenantUserId  String     @unique @map("tenant_user_id") @db.Uuid
+  qualifications String[]  @default([])
+  specialties   String[]   @default([])
+  bio           String?
+  licenseNumber String?    @map("license_number")
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantUser TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("nutritionist_profiles")
+}
+
+// ----------------------------------------------------
+// NUTRITION TARGETS (CALCULATED + OVERRIDDEN)
+// ----------------------------------------------------
+
+model NutritionTarget {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  bmi                Float
+  bmr                Float
+  tdee               Float
+  dailyCalorieTarget Float    @map("daily_calorie_target")
+  proteinTargetG     Float    @map("protein_target_g")
+  carbsTargetG       Float    @map("carbs_target_g")
+  fatTargetG         Float    @map("fat_target_g")
+  fiberTargetG       Float    @default(30) @map("fiber_target_g")
+  isCustomOverride   Boolean  @default(false) @map("is_custom_override")
+  overriddenById     String?  @map("overridden_by_id") @db.Uuid
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@map("nutrition_targets")
+}
+
+// ----------------------------------------------------
+// FOOD DATABASE (GLOBAL & CUSTOM)
+// ----------------------------------------------------
+
+model FoodItem {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String?  @map("tenant_id") @db.Uuid
+  name         String
+  category     String   @default("Other")
+  servingSize  Float    @default(100) @map("serving_size")
+  servingUnit  String   @default("g") @map("serving_unit")
+  calories     Float
+  protein      Float
+  carbs        Float
+  fat          Float
+  fiber        Float    @default(0)
+  sugar        Float    @default(0)
+  sodium       Float    @default(0)
+  cuisine      String   @default("Indian")
+  isVegetarian Boolean  @default(true) @map("is_vegetarian")
+  isVegan      Boolean  @default(false) @map("is_vegan")
+  isGlobal     Boolean  @default(true) @map("is_global")
+  createdById  String?  @map("created_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant        Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dietMealItems DietMealItem[]
+
+  @@index([tenantId])
+  @@index([name])
+  @@index([category])
+  @@index([cuisine])
+  @@index([isVegetarian])
+  @@map("food_items")
+}
+
+// ----------------------------------------------------
+// DIET PLANNING
+// ----------------------------------------------------
+
+model DietPlan {
+  id             String     @id @default(uuid()) @db.Uuid
+  tenantId       String     @map("tenant_id") @db.Uuid
+  customerId     String     @map("customer_id") @db.Uuid
+  createdById    String     @map("created_by_id") @db.Uuid
+  name           String
+  description    String?
+  durationDays   Int        @default(7) @map("duration_days")
+  targetCalories Float      @map("target_calories")
+  targetProteinG Float      @map("target_protein_g")
+  targetCarbsG   Float      @map("target_carbs_g")
+  targetFatG     Float      @map("target_fat_g")
+  status         PlanStatus @default(DRAFT)
+  isAiGenerated  Boolean    @default(false) @map("is_ai_generated")
+  aiModel        String?    @map("ai_model")
+  startDate      DateTime?  @map("start_date") @db.Date
+  endDate        DateTime?  @map("end_date") @db.Date
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerProfile CustomerProfile @relation(fields: [customerId], references: [userId], onDelete: Cascade)
+  creator         User            @relation("DietPlanCreator", fields: [createdById], references: [id])
+  days            DietPlanDay[]
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, status])
+  @@map("diet_plans")
+}
+
+model DietPlanDay {
+  id            String   @id @default(uuid()) @db.Uuid
+  dietPlanId    String   @map("diet_plan_id") @db.Uuid
+  dayNumber     Int      @map("day_number")
+  totalCalories Float    @default(0) @map("total_calories")
+  totalProteinG Float    @default(0) @map("total_protein_g")
+  totalCarbsG   Float    @default(0) @map("total_carbs_g")
+  totalFatG     Float    @default(0) @map("total_fat_g")
+  totalFiberG   Float    @default(0) @map("total_fiber_g")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  dietPlan DietPlan   @relation(fields: [dietPlanId], references: [id], onDelete: Cascade)
+  meals    DietMeal[]
+
+  @@unique([dietPlanId, dayNumber])
+  @@index([dietPlanId])
+  @@map("diet_plan_days")
+}
+
+model DietMeal {
+  id             String   @id @default(uuid()) @db.Uuid
+  dietPlanDayId  String   @map("diet_plan_day_id") @db.Uuid
+  mealType       MealType @default(BREAKFAST) @map("meal_type")
+  name           String
+  timeSuggestion String?  @map("time_suggestion")
+  mealOrder      Int      @default(1) @map("meal_order")
+  totalCalories  Float    @default(0) @map("total_calories")
+  totalProteinG  Float    @default(0) @map("total_protein_g")
+  totalCarbsG    Float    @default(0) @map("total_carbs_g")
+  totalFatG      Float    @default(0) @map("total_fat_g")
+  totalFiberG    Float    @default(0) @map("total_fiber_g")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  dietPlanDay DietPlanDay    @relation(fields: [dietPlanDayId], references: [id], onDelete: Cascade)
+  items       DietMealItem[]
+
+  @@index([dietPlanDayId])
+  @@map("diet_meals")
+}
+
+model DietMealItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  dietMealId     String   @map("diet_meal_id") @db.Uuid
+  foodItemId     String?  @map("food_item_id") @db.Uuid
+  customFoodName String?  @map("custom_food_name")
+  quantity       Float    @default(1)
+  servingSize    Float    @default(100) @map("serving_size")
+  servingUnit    String   @default("g") @map("serving_unit")
+  calories       Float
+  proteinG       Float    @map("protein_g")
+  carbsG         Float    @map("carbs_g")
+  fatG           Float    @map("fat_g")
+  fiberG         Float    @default(0) @map("fiber_g")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  dietMeal DietMeal  @relation(fields: [dietMealId], references: [id], onDelete: Cascade)
+  foodItem FoodItem? @relation(fields: [foodItemId], references: [id])
+
+  @@index([dietMealId])
+  @@index([foodItemId])
+  @@map("diet_meal_items")
+}
+
+// ----------------------------------------------------
+// FOOD LOGGING & TRACKING
+// ----------------------------------------------------
+
+model FoodLog {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  date               DateTime  @db.Date
+  mealType           MealType  @default(BREAKFAST) @map("meal_type")
+  foodItemId         String?   @map("food_item_id") @db.Uuid
+  foodName           String    @map("food_name")
+  quantity           Float     @default(1)
+  servingSize        Float     @default(100) @map("serving_size")
+  servingUnit        String    @default("g") @map("serving_unit")
+  calories           Float
+  proteinG           Float     @map("protein_g")
+  carbsG             Float     @map("carbs_g")
+  fatG               Float     @map("fat_g")
+  fiberG             Float     @default(0) @map("fiber_g")
+  photoUrl           String?   @map("photo_url")
+  isAiRecognized     Boolean   @default(false) @map("is_ai_recognized")
+  aiConfidenceScore  Float?    @map("ai_confidence_score")
+  loggedAt           DateTime  @default(now()) @map("logged_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, date])
+  @@map("food_logs")
+}
+
+// ----------------------------------------------------
+// EXERCISE & WORKOUT PLANNING
+// ----------------------------------------------------
+
+model Exercise {
+  id               String           @id @default(uuid()) @db.Uuid
+  tenantId         String?          @map("tenant_id") @db.Uuid
+  name             String
+  description      String?
+  category         ExerciseCategory @default(STRENGTH)
+  muscleGroup      MuscleGroup      @map("muscle_group")
+  secondaryMuscles String[]         @default([]) @map("secondary_muscles")
+  equipment        Equipment        @default(BARBELL)
+  difficulty       Difficulty       @default(BEGINNER)
+  videoUrl         String?          @map("video_url")
+  instructions     String[]         @default([])
+  isGlobal         Boolean          @default(true) @map("is_global")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant             Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workoutDayExercises WorkoutDayExercise[]
+
+  @@index([tenantId])
+  @@index([name])
+  @@index([muscleGroup])
+  @@index([equipment])
+  @@map("exercises")
+}
+
+model WorkoutPlan {
+  id             String     @id @default(uuid()) @db.Uuid
+  tenantId       String     @map("tenant_id") @db.Uuid
+  customerId     String     @map("customer_id") @db.Uuid
+  createdById    String     @map("created_by_id") @db.Uuid
+  name           String
+  description    String?
+  durationWeeks  Int        @default(4) @map("duration_weeks")
+  difficulty     Difficulty @default(BEGINNER)
+  goal           String     @default("General Fitness")
+  status         PlanStatus @default(DRAFT)
+  isAiGenerated  Boolean    @default(false) @map("is_ai_generated")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  creator User         @relation("WorkoutPlanCreator", fields: [createdById], references: [id])
+  days    WorkoutDay[]
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, status])
+  @@map("workout_plans")
+}
+
+model WorkoutDay {
+  id                    String   @id @default(uuid()) @db.Uuid
+  workoutPlanId         String   @map("workout_plan_id") @db.Uuid
+  dayNumber             Int      @map("day_number")
+  dayName               String   @map("day_name")
+  isRestDay             Boolean  @default(false) @map("is_rest_day")
+  targetDurationMinutes Int      @default(45) @map("target_duration_minutes")
+  notes                 String?
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workoutPlan WorkoutPlan          @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+  exercises   WorkoutDayExercise[]
+
+  @@unique([workoutPlanId, dayNumber])
+  @@index([workoutPlanId])
+  @@map("workout_days")
+}
+
+model WorkoutDayExercise {
+  id                String   @id @default(uuid()) @db.Uuid
+  workoutDayId      String   @map("workout_day_id") @db.Uuid
+  exerciseId        String   @map("exercise_id") @db.Uuid
+  orderInDay        Int      @default(1) @map("order_in_day")
+  sets              Int      @default(3)
+  reps              Int?     @default(10)
+  targetWeightKg    Float?   @map("target_weight_kg")
+  durationSeconds   Int?     @map("duration_seconds")
+  restTimeSeconds   Int      @default(60) @map("rest_time_seconds")
+  tempo             String?  @default("2-0-2-0")
+  notes             String?
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  workoutDay WorkoutDay @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
+  exercise   Exercise   @relation(fields: [exerciseId], references: [id])
+
+  @@index([workoutDayId])
+  @@index([exerciseId])
+  @@map("workout_day_exercises")
+}
+
+// ----------------------------------------------------
+// WORKOUT LOGGING
+// ----------------------------------------------------
+
+model WorkoutLog {
+  id                   String    @id @default(uuid()) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  userId               String    @map("user_id") @db.Uuid
+  workoutDayId         String?   @map("workout_day_id") @db.Uuid
+  workoutPlanId        String?   @map("workout_plan_id") @db.Uuid
+  name                 String
+  date                 DateTime  @db.Date
+  startedAt            DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt          DateTime? @map("completed_at") @db.Timestamptz(6)
+  durationMinutes      Int?      @map("duration_minutes")
+  caloriesBurned       Float?    @map("calories_burned")
+  notes                String?
+  perceivedExertionRpe Int?      @map("perceived_exertion_rpe")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercises WorkoutLogExercise[]
+
+  @@index([tenantId, userId, date])
+  @@map("workout_logs")
+}
+
+model WorkoutLogExercise {
+  id            String   @id @default(uuid()) @db.Uuid
+  workoutLogId  String   @map("workout_log_id") @db.Uuid
+  exerciseId    String   @map("exercise_id") @db.Uuid
+  setNumber     Int      @map("set_number")
+  repsCompleted Int      @map("reps_completed")
+  weightKg      Float    @map("weight_kg")
+  rpe           Float?
+  notes         String?
+
+  workoutLog WorkoutLog @relation(fields: [workoutLogId], references: [id], onDelete: Cascade)
+
+  @@index([workoutLogId])
+  @@map("workout_log_exercises")
+}
+
+// ----------------------------------------------------
+// PROGRESS TRACKING (WATER, WEIGHT, BODY, PHOTOS)
+// ----------------------------------------------------
+
+model WaterLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  date      DateTime @db.Date
+  amountMl  Int      @map("amount_ml")
+  loggedAt  DateTime @default(now()) @map("logged_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, date])
+  @@map("water_logs")
+}
+
+model WeightLog {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  date               DateTime @db.Date
+  weightKg           Float    @map("weight_kg")
+  bodyFatPercentage  Float?   @map("body_fat_percentage")
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, date])
+  @@map("weight_logs")
+}
+
+model BodyMeasurement {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  date      DateTime @db.Date
+  chestCm   Float?   @map("chest_cm")
+  waistCm   Float?   @map("waist_cm")
+  hipsCm    Float?   @map("hips_cm")
+  bicepsCm  Float?   @map("biceps_cm")
+  thighsCm  Float?   @map("thighs_cm")
+  calvesCm  Float?   @map("calves_cm")
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, date])
+  @@map("body_measurements")
+}
+
+model ProgressPhoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  photoUrl  String   @map("photo_url")
+  pose      String?  @default("Front")
+  date      DateTime @db.Date
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, date])
+  @@map("progress_photos")
+}
+
+// ----------------------------------------------------
+// AI CONVERSATIONS & COACH
+// ----------------------------------------------------
+
+model AiConversation {
+  id        String      @id @default(uuid()) @db.Uuid
+  tenantId  String      @map("tenant_id") @db.Uuid
+  userId    String      @map("user_id") @db.Uuid
+  title     String      @default("Fitness Coach Session")
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([tenantId, userId])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String        @id @default(uuid()) @db.Uuid
+  conversationId String        @map("conversation_id") @db.Uuid
+  role           AiMessageRole @default(USER)
+  content        String
+  metadata       Json?
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("ai_messages")
+}
+
+// ----------------------------------------------------
+// SUBSCRIPTIONS & AUDIT LOGS
+// ----------------------------------------------------
+
+model Subscription {
+  id                String             @id @default(uuid()) @db.Uuid
+  tenantId          String             @map("tenant_id") @db.Uuid
+  planTier          SubscriptionTier   @default(FREE) @map("plan_tier")
+  status            SubscriptionStatus @default(ACTIVE)
+  maxCustomers      Int                @default(10) @map("max_customers")
+  maxTrainers       Int                @default(2) @map("max_trainers")
+  maxNutritionists  Int                @default(1) @map("max_nutritionists")
+  aiFeaturesEnabled Boolean            @default(true) @map("ai_features_enabled")
+  startsAt          DateTime           @default(now()) @map("starts_at") @db.Timestamptz(6)
+  expiresAt         DateTime?          @map("expires_at") @db.Timestamptz(6)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("subscriptions")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String?  @map("tenant_id") @db.Uuid
+  actorId      String?  @map("actor_id") @db.Uuid
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  metadata     Json?
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor  User?   @relation(fields: [actorId], references: [id])
+
+  @@index([tenantId])
+  @@index([actorId])
+  @@index([resourceType])
+  @@map("audit_logs")
+}

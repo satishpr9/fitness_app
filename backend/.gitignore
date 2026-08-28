@@ -1,0 +1,23 @@
+# Compiled output
+/dist
+/node_modules
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+!.env.example
+
+# Coverage directory
+/coverage
+
+# TypeScript cache
+*.tsbuildinfo
