@@ -1,28 +1,30 @@
 import {
-  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../core/database/prisma.service';
 import { CreateWorkoutPlanDto } from './dto/workout.dto';
-import { PlanStatus, UserRole } from '@prisma/client';
+import { PlanStatus } from '@prisma/client';
 
 @Injectable()
 export class WorkoutsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Create custom workout plan with nested days and exercise prescriptions
+   * Create custom workout plan
    */
-  async create(tenantId: string, createdById: string, dto: CreateWorkoutPlanDto) {
-    const customerId = dto.customerId || createdById;
+  async create(userId: string, dto: CreateWorkoutPlanDto) {
+    const plan = await this.prisma.$transaction(async (tx) => {
+      if (dto.status === PlanStatus.ACTIVE) {
+        await tx.workoutPlan.updateMany({
+          where: { userId, status: PlanStatus.ACTIVE },
+          data: { status: PlanStatus.COMPLETED },
+        });
+      }
 
-    return this.prisma.$transaction(async (tx) => {
-      const plan = await tx.workoutPlan.create({
+      const created = await tx.workoutPlan.create({
         data: {
-          tenantId,
-          customerId,
-          createdById,
+          userId,
           name: dto.name,
           description: dto.description,
           durationWeeks: dto.durationWeeks || 4,
@@ -36,7 +38,7 @@ export class WorkoutsService {
         for (const dayDto of dto.days) {
           const day = await tx.workoutDay.create({
             data: {
-              workoutPlanId: plan.id,
+              workoutPlanId: created.id,
               dayNumber: dayDto.dayNumber,
               dayName: dayDto.dayName,
               isRestDay: dayDto.isRestDay || false,
@@ -67,18 +69,19 @@ export class WorkoutsService {
         }
       }
 
-      return this.findOne(tenantId, plan.id);
+      return created;
     });
+
+    return this.findOne(userId, plan.id);
   }
 
   /**
-   * Find workout plan by ID with nested days and exercises
+   * Find workout plan by ID
    */
-  async findOne(tenantId: string, id: string) {
+  async findOne(userId: string, id: string) {
     const plan = await this.prisma.workoutPlan.findFirst({
-      where: { id, tenantId },
+      where: { id, userId },
       include: {
-        creator: { select: { id: true, fullName: true, email: true } },
         days: {
           orderBy: { dayNumber: 'asc' },
           include: {
@@ -103,26 +106,8 @@ export class WorkoutsService {
   /**
    * List workout plans
    */
-  async findAll(
-    tenantId: string,
-    userRole: string,
-    userId: string,
-    customerId?: string,
-    status?: PlanStatus,
-    limit = 20,
-    offset = 0,
-  ) {
-    const where: any = { tenantId };
-
-    if (userRole === UserRole.CUSTOMER) {
-      where.customerId = userId;
-      where.status = {
-        in: [PlanStatus.ASSIGNED, PlanStatus.ACTIVE, PlanStatus.COMPLETED, PlanStatus.DRAFT],
-      };
-    } else if (customerId) {
-      where.customerId = customerId;
-    }
-
+  async findAll(userId: string, status?: PlanStatus, limit = 20, offset = 0) {
+    const where: any = { userId };
     if (status) {
       where.status = status;
     }
@@ -134,7 +119,6 @@ export class WorkoutsService {
         skip: offset,
         orderBy: { createdAt: 'desc' },
         include: {
-          creator: { select: { id: true, fullName: true } },
           _count: { select: { days: true } },
         },
       }),
@@ -145,16 +129,15 @@ export class WorkoutsService {
   }
 
   /**
-   * Update plan status (Approval / Activation workflow)
+   * Update plan status (e.g. Set as ACTIVE)
    */
-  async updateStatus(tenantId: string, planId: string, status: PlanStatus) {
-    const plan = await this.findOne(tenantId, planId);
+  async updateStatus(userId: string, planId: string, status: PlanStatus) {
+    await this.findOne(userId, planId);
 
     if (status === PlanStatus.ACTIVE) {
       await this.prisma.workoutPlan.updateMany({
         where: {
-          tenantId,
-          customerId: plan.customerId,
+          userId,
           status: PlanStatus.ACTIVE,
           id: { not: planId },
         },

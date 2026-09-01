@@ -9,11 +9,10 @@ export class WorkoutLogsService {
   /**
    * Log completed workout performance
    */
-  async logWorkout(tenantId: string, userId: string, dto: CreateWorkoutLogDto) {
+  async logWorkout(userId: string, dto: CreateWorkoutLogDto) {
     return this.prisma.$transaction(async (tx) => {
       const log = await tx.workoutLog.create({
         data: {
-          tenantId,
           userId,
           workoutDayId: dto.workoutDayId,
           workoutPlanId: dto.workoutPlanId,
@@ -54,10 +53,10 @@ export class WorkoutLogsService {
   /**
    * Get workout logs for user
    */
-  async getUserLogs(tenantId: string, userId: string, limit = 20, offset = 0) {
+  async getUserLogs(userId: string, limit = 20, offset = 0) {
     const [items, total] = await Promise.all([
       this.prisma.workoutLog.findMany({
-        where: { tenantId, userId },
+        where: { userId },
         take: limit,
         skip: offset,
         orderBy: { date: 'desc' },
@@ -65,7 +64,7 @@ export class WorkoutLogsService {
           exercises: true,
         },
       }),
-      this.prisma.workoutLog.count({ where: { tenantId, userId } }),
+      this.prisma.workoutLog.count({ where: { userId } }),
     ]);
 
     return { items, total, limit, offset };
@@ -74,9 +73,9 @@ export class WorkoutLogsService {
   /**
    * Get single workout log details
    */
-  async findOne(tenantId: string, id: string) {
+  async findOne(userId: string, id: string) {
     const log = await this.prisma.workoutLog.findFirst({
-      where: { id, tenantId },
+      where: { id, userId },
       include: {
         exercises: true,
       },
@@ -92,13 +91,12 @@ export class WorkoutLogsService {
   /**
    * Calculate workout streak and consistency stats
    */
-  async getWorkoutStats(tenantId: string, userId: string) {
+  async getWorkoutStats(userId: string) {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const logs = await this.prisma.workoutLog.findMany({
       where: {
-        tenantId,
         userId,
         date: { gte: thirtyDaysAgo },
       },

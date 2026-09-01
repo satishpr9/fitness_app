@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { RefreshTokenDto, SignInDto, SignUpDto } from './dto/auth.dto';
+import { RefreshTokenDto, SignInDto, SignUpDto, UpgradeTierDto } from './dto/auth.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
@@ -26,16 +26,23 @@ export class AuthController {
     return this.authService.refreshToken(dto.refreshToken);
   }
 
+  @Put('upgrade')
+  upgradeTier(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpgradeTierDto,
+  ) {
+    return this.authService.upgradeTier(user.userId, dto.tier);
+  }
+
   @Get('me')
   getProfile(@CurrentUser() user: AuthenticatedUser) {
     return {
+      id: user.userId,
       userId: user.userId,
       email: user.email,
       fullName: user.fullName,
-      tenantId: user.tenantId,
       role: user.role,
-      roles: user.roles,
-      isSuperAdmin: user.isSuperAdmin,
+      tier: user.tier,
     };
   }
 }

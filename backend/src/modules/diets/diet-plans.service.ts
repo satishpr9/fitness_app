@@ -1,35 +1,35 @@
 import {
-  BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../core/database/prisma.service';
 import {
   CopyDayDto,
-  CreateDietMealDto,
-  CreateDietMealItemDto,
   CreateDietPlanDto,
   UpdatePlanStatusDto,
 } from './dto/diet-plan.dto';
-import { PlanStatus, UserRole } from '@prisma/client';
+import { PlanStatus } from '@prisma/client';
 
 @Injectable()
 export class DietPlansService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Create a new diet plan with nested days, meals, and food items
+   * Create diet plan
    */
-  async create(tenantId: string, createdById: string, dto: CreateDietPlanDto) {
-    const customerId = dto.customerId || createdById;
+  async create(userId: string, dto: CreateDietPlanDto) {
+    const plan = await this.prisma.$transaction(async (tx) => {
+      // If creating as ACTIVE, deactivate any existing active plan
+      if (dto.status === PlanStatus.ACTIVE) {
+        await tx.dietPlan.updateMany({
+          where: { userId, status: PlanStatus.ACTIVE },
+          data: { status: PlanStatus.COMPLETED },
+        });
+      }
 
-    return this.prisma.$transaction(async (tx) => {
-      const plan = await tx.dietPlan.create({
+      const created = await tx.dietPlan.create({
         data: {
-          tenantId,
-          customerId,
-          createdById,
+          userId,
           name: dto.name,
           description: dto.description,
           durationDays: dto.durationDays || 7,
@@ -43,7 +43,6 @@ export class DietPlansService {
         },
       });
 
-      // If days provided, create days and meals
       if (dto.days && dto.days.length > 0) {
         for (const dayDto of dto.days) {
           let dayCal = 0,
@@ -52,7 +51,6 @@ export class DietPlansService {
             dayF = 0,
             dayFib = 0;
 
-          // Precompute day totals from meals
           for (const meal of dayDto.meals) {
             for (const item of meal.items) {
               dayCal += item.calories;
@@ -126,19 +124,19 @@ export class DietPlansService {
           }
         }
       }
-
-      return this.findOne(tenantId, plan.id);
+      return created;
     });
+
+    return this.findOne(userId, plan.id);
   }
 
   /**
-   * Find diet plan with full nested days, meals, and food items
+   * Find diet plan by ID
    */
-  async findOne(tenantId: string, id: string) {
+  async findOne(userId: string, id: string) {
     const plan = await this.prisma.dietPlan.findFirst({
-      where: { id, tenantId },
+      where: { id, userId },
       include: {
-        creator: { select: { id: true, fullName: true, email: true } },
         days: {
           orderBy: { dayNumber: 'asc' },
           include: {
@@ -165,30 +163,10 @@ export class DietPlansService {
   }
 
   /**
-   * List diet plans in tenant (filters by customer or status)
+   * List user's diet plans
    */
-  async findAll(
-    tenantId: string,
-    userRole: string,
-    userId: string,
-    customerId?: string,
-    status?: PlanStatus,
-    limit = 20,
-    offset = 0,
-  ) {
-    const where: any = { tenantId };
-
-    // If customer, only see own plans
-    if (userRole === UserRole.CUSTOMER) {
-      where.customerId = userId;
-      // Customers cannot see draft/in_review plans of others
-      where.status = {
-        in: [PlanStatus.ASSIGNED, PlanStatus.ACTIVE, PlanStatus.COMPLETED, PlanStatus.DRAFT],
-      };
-    } else if (customerId) {
-      where.customerId = customerId;
-    }
-
+  async findAll(userId: string, status?: PlanStatus, limit = 20, offset = 0) {
+    const where: any = { userId };
     if (status) {
       where.status = status;
     }
@@ -200,7 +178,6 @@ export class DietPlansService {
         skip: offset,
         orderBy: { createdAt: 'desc' },
         include: {
-          creator: { select: { id: true, fullName: true } },
           _count: { select: { days: true } },
         },
       }),
@@ -211,18 +188,17 @@ export class DietPlansService {
   }
 
   /**
-   * Copy Day within a Plan (e.g. Day 1 -> Day 2)
+   * Copy Day within a Plan
    */
-  async copyDay(tenantId: string, planId: string, dto: CopyDayDto) {
-    const plan = await this.findOne(tenantId, planId);
+  async copyDay(userId: string, planId: string, dto: CopyDayDto) {
+    const plan = await this.findOne(userId, planId);
     const sourceDay = plan.days.find((d) => d.dayNumber === dto.sourceDayNumber);
 
     if (!sourceDay) {
       throw new NotFoundException(`Source day ${dto.sourceDayNumber} not found`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // Remove target day if exists
+    await this.prisma.$transaction(async (tx) => {
       await tx.dietPlanDay.deleteMany({
         where: { dietPlanId: planId, dayNumber: dto.targetDayNumber },
       });
@@ -275,27 +251,21 @@ export class DietPlansService {
           });
         }
       }
-
-      return this.findOne(tenantId, planId);
     });
+
+    return this.findOne(userId, planId);
   }
 
   /**
-   * Update Diet Plan Status (Professional workflow: DRAFT -> REVIEW -> APPROVED -> ASSIGNED -> ACTIVE)
+   * Update Diet Plan Status
    */
-  async updateStatus(
-    tenantId: string,
-    planId: string,
-    statusDto: UpdatePlanStatusDto,
-  ) {
-    const plan = await this.findOne(tenantId, planId);
+  async updateStatus(userId: string, planId: string, statusDto: UpdatePlanStatusDto) {
+    await this.findOne(userId, planId);
 
-    // If making active, archive or complete currently active plans for this customer
     if (statusDto.status === PlanStatus.ACTIVE) {
       await this.prisma.dietPlan.updateMany({
         where: {
-          tenantId,
-          customerId: plan.customerId,
+          userId,
           status: PlanStatus.ACTIVE,
           id: { not: planId },
         },
@@ -306,38 +276,6 @@ export class DietPlansService {
     return this.prisma.dietPlan.update({
       where: { id: planId },
       data: { status: statusDto.status },
-    });
-  }
-
-  /**
-   * Recalculate totals for a day after meal edit
-   */
-  async recalculateDayTotals(dayId: string) {
-    const meals = await this.prisma.dietMeal.findMany({
-      where: { dietPlanDayId: dayId },
-    });
-
-    const totals = meals.reduce(
-      (acc, m) => {
-        acc.calories += m.totalCalories;
-        acc.protein += m.totalProteinG;
-        acc.carbs += m.totalCarbsG;
-        acc.fat += m.totalFatG;
-        acc.fiber += m.totalFiberG;
-        return acc;
-      },
-      { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
-    );
-
-    return this.prisma.dietPlanDay.update({
-      where: { id: dayId },
-      data: {
-        totalCalories: totals.calories,
-        totalProteinG: totals.protein,
-        totalCarbsG: totals.carbs,
-        totalFatG: totals.fat,
-        totalFiberG: totals.fiber,
-      },
     });
   }
 }

@@ -55,7 +55,7 @@ export class NutritionCalculatorService {
 
     let category = 'Normal weight';
     if (bmi < 18.5) category = 'Underweight';
-    else if (bmi >= 25 && bmi < 29.9) category = 'Overweight';
+    else if (bmi >= 25 && bmi < 30) category = 'Overweight';
     else if (bmi >= 30) category = 'Obesity';
 
     return { bmi, category };
@@ -132,7 +132,7 @@ export class NutritionCalculatorService {
     );
 
     // Water target: 35ml per kg + workout hydration bonus
-    const workoutBonus = (dto.workoutDaysPerWeek || 4) > 0 ? 500 : 0;
+    const workoutBonus = (dto.workoutDaysPerWeek ?? 4) > 0 ? 500 : 0;
     const waterTargetMl = Math.round(dto.currentWeightKg * 35 + workoutBonus);
 
     return {

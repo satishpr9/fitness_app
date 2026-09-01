@@ -7,14 +7,14 @@ export class ExercisesService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Search exercises (Global catalog + Tenant custom exercises)
+   * Search exercises (Global library + User custom exercises)
    */
-  async searchExercises(tenantId?: string, queryDto: ExerciseSearchQueryDto = {}) {
+  async searchExercises(userId?: string, queryDto: ExerciseSearchQueryDto = {}) {
     const { query, muscleGroup, equipment, difficulty, category, limit = 50, offset = 0 } =
       queryDto;
 
     const where: any = {
-      OR: [{ isGlobal: true }, ...(tenantId ? [{ tenantId }] : [])],
+      OR: [{ isGlobal: true }, ...(userId ? [{ userId }] : [])],
     };
 
     if (query) {
@@ -56,11 +56,11 @@ export class ExercisesService {
   /**
    * Find exercise by ID
    */
-  async findOne(id: string, tenantId?: string) {
+  async findOne(id: string, userId?: string) {
     const exercise = await this.prisma.exercise.findFirst({
       where: {
         id,
-        OR: [{ isGlobal: true }, ...(tenantId ? [{ tenantId }] : [])],
+        OR: [{ isGlobal: true }, ...(userId ? [{ userId }] : [])],
       },
     });
 
@@ -72,9 +72,9 @@ export class ExercisesService {
   }
 
   /**
-   * Create custom exercise (or global if super admin)
+   * Create custom exercise (User or Global if Admin)
    */
-  async createExercise(dto: CreateExerciseDto, tenantId?: string, isGlobal = false) {
+  async createExercise(dto: CreateExerciseDto, userId?: string, isGlobal = false) {
     return this.prisma.exercise.create({
       data: {
         name: dto.name,
@@ -86,8 +86,8 @@ export class ExercisesService {
         difficulty: dto.difficulty || 'BEGINNER',
         videoUrl: dto.videoUrl,
         instructions: dto.instructions || [],
-        isGlobal: isGlobal || !tenantId,
-        tenantId: isGlobal ? null : tenantId,
+        isGlobal: isGlobal || !userId,
+        userId: isGlobal ? null : userId,
       },
     });
   }

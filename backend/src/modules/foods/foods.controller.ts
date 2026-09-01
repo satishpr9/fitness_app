@@ -11,7 +11,6 @@ import {
 import { FoodsService } from './foods.service';
 import { CreateFoodItemDto, FoodSearchQueryDto } from './dto/food.dto';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
-import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Public } from '../../common/decorators/public.decorator';
@@ -21,68 +20,46 @@ import { UserRole } from '@prisma/client';
 export class FoodsController {
   constructor(private readonly foodsService: FoodsService) {}
 
-  /**
-   * Search food items across global database and tenant-specific items
-   */
   @Get('search')
   search(
-    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Query() queryDto: FoodSearchQueryDto,
   ) {
-    return this.foodsService.searchFoods(tenantId, queryDto);
+    return this.foodsService.searchFoods(user?.userId, queryDto);
   }
 
-  /**
-   * Get all food categories
-   */
   @Public()
   @Get('categories')
   getCategories() {
     return this.foodsService.getCategories();
   }
 
-  /**
-   * Get all supported cuisines
-   */
   @Public()
   @Get('cuisines')
   getCuisines() {
     return this.foodsService.getCuisines();
   }
 
-  /**
-   * Create custom food item (Tenant-scoped)
-   */
   @Post('custom')
   createCustomFood(
-    @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateFoodItemDto,
   ) {
-    return this.foodsService.createFood(dto, tenantId, user.userId, false);
+    return this.foodsService.createFood(dto, user.userId, false);
   }
 
-  /**
-   * Create global food item (Super Admin only)
-   */
   @Post('global')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  createGlobalFood(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: CreateFoodItemDto,
-  ) {
-    return this.foodsService.createFood(dto, null, user.userId, true);
+  @Roles(UserRole.ADMIN)
+  createGlobalFood(@Body() dto: CreateFoodItemDto) {
+    return this.foodsService.createFood(dto, null, true);
   }
 
-  /**
-   * Get single food item
-   */
   @Get(':id')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.foodsService.findOne(id, tenantId);
+    return this.foodsService.findOne(id, user?.userId);
   }
 }

@@ -9,10 +9,9 @@ export class WaterService {
   /**
    * Log water intake
    */
-  async logWater(tenantId: string, userId: string, dto: LogWaterDto) {
+  async logWater(userId: string, dto: LogWaterDto) {
     return this.prisma.waterLog.create({
       data: {
-        tenantId,
         userId,
         date: new Date(dto.date),
         amountMl: dto.amountMl,
@@ -21,11 +20,11 @@ export class WaterService {
   }
 
   /**
-   * Quick Add water (e.g. +250ml, +500ml, +750ml for today)
+   * Quick Add water (+250ml, +500ml, +750ml)
    */
-  async quickAdd(tenantId: string, userId: string, dto: QuickAddWaterDto) {
+  async quickAdd(userId: string, dto: QuickAddWaterDto) {
     const today = new Date().toISOString().split('T')[0];
-    return this.logWater(tenantId, userId, {
+    return this.logWater(userId, {
       date: today,
       amountMl: dto.amountMl,
     });
@@ -34,29 +33,22 @@ export class WaterService {
   /**
    * Get daily water intake and goal progress
    */
-  async getDailyWater(tenantId: string, userId: string, dateStr: string) {
+  async getDailyWater(userId: string, dateStr: string) {
     const date = new Date(dateStr);
 
-    const [logs, profile, tenantSettings] = await Promise.all([
+    const [logs, profile] = await Promise.all([
       this.prisma.waterLog.findMany({
-        where: { tenantId, userId, date },
+        where: { userId, date },
         orderBy: { loggedAt: 'asc' },
       }),
-      this.prisma.customerProfile.findUnique({
+      this.prisma.profile.findUnique({
         where: { userId },
         select: { dailyWaterTargetMl: true },
-      }),
-      this.prisma.tenantSettings.findUnique({
-        where: { tenantId },
-        select: { waterDefaultTargetMl: true },
       }),
     ]);
 
     const totalConsumedMl = logs.reduce((acc, log) => acc + log.amountMl, 0);
-    const targetMl =
-      profile?.dailyWaterTargetMl ||
-      tenantSettings?.waterDefaultTargetMl ||
-      2500;
+    const targetMl = profile?.dailyWaterTargetMl || 2500;
 
     const glassesConsumed = Number((totalConsumedMl / 250).toFixed(1));
     const targetGlasses = Math.ceil(targetMl / 250);
@@ -76,16 +68,15 @@ export class WaterService {
   /**
    * Get weekly water history
    */
-  async getWeeklyWater(tenantId: string, userId: string, startDateStr: string) {
+  async getWeeklyWater(userId: string, startDateStr: string) {
     const start = new Date(startDateStr);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
 
     const logs = await this.prisma.waterLog.findMany({
       where: {
-        tenantId,
         userId,
-        date: { gte: start, lte: end },
+        date: { gte: start, lt: end },
       },
       orderBy: { date: 'asc' },
     });

@@ -14,7 +14,7 @@ export class NutritionService {
   ) {}
 
   /**
-   * Calculate targets deterministically given user metrics
+   * Deterministic calculation given metrics
    */
   calculateTargets(dto: CalculateNutritionDto): NutritionCalculationResult {
     return this.calculator.calculateNutrition(dto);
@@ -23,19 +23,16 @@ export class NutritionService {
   /**
    * Get or calculate and persist current user's nutrition targets
    */
-  async getUserTargets(tenantId: string, userId: string) {
-    // Check if target already exists
-    const existing = await this.prisma.nutritionTarget.findFirst({
-      where: { tenantId, userId },
-      orderBy: { updatedAt: 'desc' },
+  async getUserTargets(userId: string) {
+    const existing = await this.prisma.nutritionTarget.findUnique({
+      where: { userId },
     });
 
     if (existing) {
       return existing;
     }
 
-    // Retrieve customer profile to calculate
-    const profile = await this.prisma.customerProfile.findUnique({
+    const profile = await this.prisma.profile.findUnique({
       where: { userId },
     });
 
@@ -50,15 +47,14 @@ export class NutritionService {
       gender: profile.gender,
       heightCm: profile.heightCm,
       currentWeightKg: profile.currentWeightKg,
-      targetWeightKg: profile.targetWeightKg,
-      fitnessGoal: profile.fitnessGoal || 'GENERAL_FITNESS' as any,
-      activityLevel: profile.activityLevel || 'MODERATELY_ACTIVE' as any,
-      workoutDaysPerWeek: profile.workoutDaysPerWeek || 4,
+      targetWeightKg: profile.targetWeightKg ?? undefined,
+      fitnessGoal: profile.fitnessGoal ?? ('GENERAL_FITNESS' as any),
+      activityLevel: profile.activityLevel ?? ('MODERATELY_ACTIVE' as any),
+      workoutDaysPerWeek: profile.workoutDaysPerWeek ?? 4,
     });
 
     return this.prisma.nutritionTarget.create({
       data: {
-        tenantId,
         userId,
         bmi: calculated.bmi,
         bmr: calculated.bmr,
@@ -74,12 +70,10 @@ export class NutritionService {
   }
 
   /**
-   * Allow trainer or nutritionist or admin to override target values
+   * Allow user to customize/override their targets
    */
   async overrideUserTargets(
-    tenantId: string,
     userId: string,
-    overriddenById: string,
     overrides: {
       dailyCalorieTarget?: number;
       proteinTargetG?: number;
@@ -89,10 +83,10 @@ export class NutritionService {
       notes?: string;
     },
   ) {
-    const current = await this.getUserTargets(tenantId, userId);
+    const current = await this.getUserTargets(userId);
 
     return this.prisma.nutritionTarget.update({
-      where: { id: current.id },
+      where: { userId },
       data: {
         dailyCalorieTarget: overrides.dailyCalorieTarget ?? current.dailyCalorieTarget,
         proteinTargetG: overrides.proteinTargetG ?? current.proteinTargetG,
@@ -101,7 +95,6 @@ export class NutritionService {
         fiberTargetG: overrides.fiberTargetG ?? current.fiberTargetG,
         notes: overrides.notes ?? current.notes,
         isCustomOverride: true,
-        overriddenById,
       },
     });
   }

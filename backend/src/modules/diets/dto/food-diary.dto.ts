@@ -1,5 +1,4 @@
 import {
-  IsBoolean,
   IsDateString,
   IsEnum,
   IsNotEmpty,
@@ -61,22 +60,4 @@ export class LogFoodDto {
   @IsOptional()
   @IsString()
   photoUrl?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isAiRecognized?: boolean = false;
-
-  @IsOptional()
-  @IsNumber()
-  aiConfidenceScore?: number;
-}
-
-export class FoodRecognitionDto {
-  @IsString()
-  @IsNotEmpty()
-  imageBase64: string;
-
-  @IsOptional()
-  @IsString()
-  mimeType?: string = 'image/jpeg';
 }

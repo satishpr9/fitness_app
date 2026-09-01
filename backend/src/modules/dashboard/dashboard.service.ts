@@ -9,15 +9,12 @@ export class DashboardService {
   /**
    * Aggregate complete Customer Dashboard
    */
-  async getCustomerDashboard(tenantId: string, userId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  async getCustomerDashboard(userId: string) {
+    // UTC-safe date for @db.Date queries
+    const todayStr = new Date().toISOString().split('T')[0];
+    const today = new Date(todayStr);
+    const dayOfWeek = new Date().getDay();
 
-    const todayDateStr = today.toISOString().split('T')[0];
-
-    // Determine greeting
     const hour = new Date().getHours();
     let greeting = 'Good Morning 👋';
     if (hour >= 12 && hour < 17) greeting = 'Good Afternoon ☀️';
@@ -27,41 +24,28 @@ export class DashboardService {
       profile,
       nutritionTarget,
       todayFoodLogs,
-      activeDietPlan,
       activeWorkoutPlan,
       todayWorkoutLog,
       todayWaterLogs,
       recentWorkoutLogs,
     ] = await Promise.all([
-      this.prisma.customerProfile.findUnique({
+      this.prisma.profile.findUnique({
         where: { userId },
         include: {
-          user: { select: { fullName: true, avatarUrl: true } },
-          assignedTrainer: { select: { fullName: true } },
-          assignedNutritionist: { select: { fullName: true } },
+          user: { select: { fullName: true, avatarUrl: true, tier: true } },
         },
       }),
-      this.prisma.nutritionTarget.findFirst({
-        where: { tenantId, userId },
-        orderBy: { updatedAt: 'desc' },
+      this.prisma.nutritionTarget.findUnique({
+        where: { userId },
       }),
       this.prisma.foodLog.findMany({
-        where: { tenantId, userId, date: today },
-      }),
-      this.prisma.dietPlan.findFirst({
-        where: { tenantId, customerId: userId, status: PlanStatus.ACTIVE },
-        include: {
-          days: {
-            where: { dayNumber: 1 },
-            include: { meals: true },
-          },
-        },
+        where: { userId, date: today },
       }),
       this.prisma.workoutPlan.findFirst({
-        where: { tenantId, customerId: userId, status: PlanStatus.ACTIVE },
+        where: { userId, status: PlanStatus.ACTIVE },
         include: {
           days: {
-            where: { dayNumber: (today.getDay() === 0 ? 7 : today.getDay()) },
+            where: { dayNumber: dayOfWeek === 0 ? 7 : dayOfWeek },
             include: {
               exercises: {
                 include: { exercise: true },
@@ -71,25 +55,23 @@ export class DashboardService {
         },
       }),
       this.prisma.workoutLog.findFirst({
-        where: { tenantId, userId, date: today },
+        where: { userId, date: today },
       }),
       this.prisma.waterLog.findMany({
-        where: { tenantId, userId, date: today },
+        where: { userId, date: today },
       }),
       this.prisma.workoutLog.findMany({
         where: {
-          tenantId,
           userId,
           date: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
         },
       }),
     ]);
 
-    // Nutrition aggregates
-    const calTarget = nutritionTarget?.dailyCalorieTarget || 2000;
-    const proteinTarget = nutritionTarget?.proteinTargetG || 130;
-    const carbsTarget = nutritionTarget?.carbsTargetG || 220;
-    const fatTarget = nutritionTarget?.fatTargetG || 65;
+    const calTarget = nutritionTarget?.dailyCalorieTarget ?? 2000;
+    const proteinTarget = nutritionTarget?.proteinTargetG ?? 130;
+    const carbsTarget = nutritionTarget?.carbsTargetG ?? 220;
+    const fatTarget = nutritionTarget?.fatTargetG ?? 65;
 
     let calConsumed = 0;
     let proteinConsumed = 0;
@@ -105,17 +87,19 @@ export class DashboardService {
       loggedMealTypes.add(log.mealType);
     }
 
-    // Water aggregates
     const waterConsumedMl = todayWaterLogs.reduce((acc, l) => acc + l.amountMl, 0);
-    const waterTargetMl = profile?.dailyWaterTargetMl || 2500;
+    const waterTargetMl = profile?.dailyWaterTargetMl ?? 2500;
+
+    const todayDay = activeWorkoutPlan?.days[0];
 
     return {
       greeting,
       userName: profile?.user?.fullName || 'Athlete',
       avatarUrl: profile?.user?.avatarUrl,
+      tier: profile?.user?.tier,
       weight: {
-        current: profile?.currentWeightKg || 70,
-        target: profile?.targetWeightKg || 68,
+        current: profile?.currentWeightKg ?? 70,
+        target: profile?.targetWeightKg ?? 68,
       },
       calories: {
         consumed: Math.round(calConsumed),
@@ -130,15 +114,16 @@ export class DashboardService {
       todayMeals: {
         breakfastLogged: loggedMealTypes.has(MealType.BREAKFAST),
         lunchLogged: loggedMealTypes.has(MealType.LUNCH),
-        snackLogged: loggedMealTypes.has(MealType.MORNING_SNACK) || loggedMealTypes.has(MealType.EVENING_SNACK),
+        snackLogged:
+          loggedMealTypes.has(MealType.MORNING_SNACK) || loggedMealTypes.has(MealType.EVENING_SNACK),
         dinnerLogged: loggedMealTypes.has(MealType.DINNER),
       },
       todayWorkout: {
         isCompleted: !!todayWorkoutLog,
         planTitle: activeWorkoutPlan?.name,
-        todaySessionName: activeWorkoutPlan?.days[0]?.dayName || 'Rest Day',
-        isRestDay: activeWorkoutPlan?.days[0]?.isRestDay ?? false,
-        exercisesCount: activeWorkoutPlan?.days[0]?.exercises?.length || 0,
+        todaySessionName: todayDay?.dayName || 'Rest Day',
+        isRestDay: todayDay ? todayDay.isRestDay : true,
+        exercisesCount: todayDay?.exercises?.length || 0,
       },
       water: {
         consumedMl: waterConsumedMl,
@@ -148,47 +133,6 @@ export class DashboardService {
       },
       streak: {
         workoutsThisWeek: recentWorkoutLogs.length,
-      },
-    };
-  }
-
-  /**
-   * Aggregate Organization Dashboard for Tenant Administrators
-   */
-  async getTenantDashboard(tenantId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-    const [
-      totalCustomers,
-      totalTrainers,
-      totalNutritionists,
-      activeDietPlans,
-      activeWorkoutPlans,
-      recentWorkoutsCount,
-      newRegistrationsCount,
-    ] = await Promise.all([
-      this.prisma.customerProfile.count({ where: { tenantId } }),
-      this.prisma.tenantUser.count({ where: { tenantId, role: 'TRAINER', status: 'ACTIVE' } }),
-      this.prisma.tenantUser.count({ where: { tenantId, role: 'NUTRITIONIST', status: 'ACTIVE' } }),
-      this.prisma.dietPlan.count({ where: { tenantId, status: PlanStatus.ACTIVE } }),
-      this.prisma.workoutPlan.count({ where: { tenantId, status: PlanStatus.ACTIVE } }),
-      this.prisma.workoutLog.count({ where: { tenantId, date: { gte: thirtyDaysAgo } } }),
-      this.prisma.tenantUser.count({
-        where: { tenantId, role: 'CUSTOMER', createdAt: { gte: thirtyDaysAgo } },
-      }),
-    ]);
-
-    return {
-      overview: {
-        totalCustomers,
-        totalTrainers,
-        totalNutritionists,
-        activeDietPlans,
-        activeWorkoutPlans,
-        completedWorkouts30Days: recentWorkoutsCount,
-        newRegistrations30Days: newRegistrationsCount,
       },
     };
   }

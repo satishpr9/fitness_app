@@ -17,7 +17,7 @@ import { SupabaseJwtStrategy } from '../../common/guards/supabase-jwt.strategy';
           config.get<string>('jwt.secret') ||
           'fitness-platform-super-secret-jwt-key-2026',
         signOptions: {
-          expiresIn: config.get<string>('jwt.expiresIn') || '7d',
+          expiresIn: (config.get<string>('jwt.expiresIn') || '7d') as any,
         },
       }),
     }),

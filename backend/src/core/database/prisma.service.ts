@@ -32,19 +32,16 @@ export class PrismaService
   }
 
   /**
-   * Helper to execute queries scoped to Supabase RLS context via SET LOCAL
+   * Helper to execute queries scoped to Supabase RLS user context
    */
-  async withRlsContext<T>(
+  async withUserContext<T>(
     userId: string,
-    tenantId: string,
     callback: (tx: PrismaClient) => Promise<T>,
   ): Promise<T> {
     return this.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
-        `SELECT set_config('request.jwt.claim.sub', $1, true),
-                set_config('app.current_tenant_id', $2, true)`,
+        `SELECT set_config('request.jwt.claim.sub', $1, true)`,
         userId,
-        tenantId,
       );
       return callback(tx as unknown as PrismaClient);
     });

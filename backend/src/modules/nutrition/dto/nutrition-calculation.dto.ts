@@ -2,6 +2,7 @@ import {
   IsEnum,
   IsNumber,
   IsOptional,
+  IsString,
   Max,
   Min,
 } from 'class-validator';
@@ -61,4 +62,36 @@ export interface NutritionCalculationResult {
     fat: number;
   };
   waterTargetMl: number;
+}
+
+export class OverrideNutritionTargetDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(500)
+  @Max(10000)
+  dailyCalorieTarget?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  proteinTargetG?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  carbsTargetG?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fatTargetG?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fiberTargetG?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

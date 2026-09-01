@@ -66,18 +66,67 @@ describe('NutritionCalculatorService', () => {
       expect(result.waterTargetMl).toBeGreaterThan(2500);
     });
 
-    it('should enforce safe calorie minimum floor', () => {
+    it('should correctly classify BMI at 29.9 boundary as Overweight', () => {
+      // Height 170cm, Weight 86.41kg -> BMI = 86.41 / (1.7 * 1.7) = 29.899 -> 29.9
+      const result = service.calculateBmi(86.41, 170);
+      expect(result.bmi).toBe(29.9);
+      expect(result.category).toBe('Overweight');
+    });
+
+    it('should correctly handle zero workout days for hydration without false bonus', () => {
+      const resultZeroWorkouts = service.calculateNutrition({
+        age: 30,
+        gender: Gender.MALE,
+        heightCm: 175,
+        currentWeightKg: 70,
+        fitnessGoal: FitnessGoal.MAINTENANCE,
+        activityLevel: ActivityLevel.SEDENTARY,
+        workoutDaysPerWeek: 0,
+      });
+
+      // 70 * 35 = 2450ml (no 500ml bonus)
+      expect(resultZeroWorkouts.waterTargetMl).toBe(2450);
+
+      const resultWithWorkouts = service.calculateNutrition({
+        age: 30,
+        gender: Gender.MALE,
+        heightCm: 175,
+        currentWeightKg: 70,
+        fitnessGoal: FitnessGoal.MAINTENANCE,
+        activityLevel: ActivityLevel.SEDENTARY,
+        workoutDaysPerWeek: 4,
+      });
+
+      // 70 * 35 + 500 = 2950ml
+      expect(resultWithWorkouts.waterTargetMl).toBe(2950);
+    });
+
+    it('should enforce safe calorie minimum floor for males (1500 kcal)', () => {
       const result = service.calculateNutrition({
-        age: 60,
-        gender: Gender.FEMALE,
+        age: 80,
+        gender: Gender.MALE,
         heightCm: 150,
         currentWeightKg: 45,
         fitnessGoal: FitnessGoal.WEIGHT_LOSS,
         activityLevel: ActivityLevel.SEDENTARY,
       });
 
-      // Female minimum safe floor is 1200 kcal
-      expect(result.dailyCalorieTarget).toBeGreaterThanOrEqual(1200);
+      // Male minimum safe floor is 1500 kcal
+      expect(result.dailyCalorieTarget).toBe(1500);
+    });
+
+    it('should ensure macro percentages sum to 100%', () => {
+      const result = service.calculateNutrition({
+        age: 25,
+        gender: Gender.MALE,
+        heightCm: 180,
+        currentWeightKg: 75,
+        fitnessGoal: FitnessGoal.MUSCLE_GAIN,
+        activityLevel: ActivityLevel.MODERATELY_ACTIVE,
+      });
+
+      const { protein, carbs, fat } = result.macroPercentages;
+      expect(protein + carbs + fat).toBe(100);
     });
   });
 });

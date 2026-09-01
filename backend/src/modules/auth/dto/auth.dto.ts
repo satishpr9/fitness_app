@@ -6,7 +6,7 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
-import { UserRole } from '@prisma/client';
+import { SubscriptionTier, UserRole } from '@prisma/client';
 
 export class SignUpDto {
   @IsEmail()
@@ -25,12 +25,8 @@ export class SignUpDto {
   phone?: string;
 
   @IsOptional()
-  @IsString()
-  tenantSlug?: string;
-
-  @IsOptional()
   @IsEnum(UserRole)
-  role?: UserRole = UserRole.CUSTOMER;
+  role?: UserRole = UserRole.USER;
 }
 
 export class SignInDto {
@@ -40,14 +36,15 @@ export class SignInDto {
   @IsString()
   @IsNotEmpty()
   password: string;
-
-  @IsOptional()
-  @IsString()
-  tenantSlug?: string;
 }
 
 export class RefreshTokenDto {
   @IsString()
   @IsNotEmpty()
   refreshToken: string;
+}
+
+export class UpgradeTierDto {
+  @IsEnum(SubscriptionTier)
+  tier: SubscriptionTier;
 }

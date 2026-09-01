@@ -1,4 +1,13 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import {
+  Difficulty,
+  Equipment,
+  ExerciseCategory,
+  FitnessGoal,
+  Gender,
+  MuscleGroup,
+  PrismaClient,
+  UserRole,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -6,59 +15,34 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting Database Seeding...');
 
-  // 1. Create Default Tenant
-  const tenant = await prisma.tenant.upsert({
-    where: { slug: 'apex-fitness' },
-    update: {},
-    create: {
-      name: 'Apex Fitness Club',
-      slug: 'apex-fitness',
-      type: 'GYM',
-      status: 'ACTIVE',
-      settings: {
-        create: {
-          primaryColor: '#10B981',
-          waterDefaultTargetMl: 2500,
-          allowedAiPlansPerMonth: 200,
-          supportedCuisines: ['Indian', 'Continental', 'Asian', 'Mediterranean'],
-        },
-      },
-      subscriptions: {
-        create: {
-          planTier: 'ENTERPRISE',
-          status: 'ACTIVE',
-          maxCustomers: 1000,
-          maxTrainers: 50,
-          maxNutritionists: 20,
-          aiFeaturesEnabled: true,
-        },
-      },
-    },
-  });
-  console.log(`✅ Default Tenant created: ${tenant.name} (${tenant.id})`);
-
-  // 2. Create Super Admin User
+  // 1. Create Admin User
   const passwordHash = await bcrypt.hash('Admin@12345', 10);
-  const superAdmin = await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { email: 'admin@fitnessplatform.com' },
     update: {},
     create: {
       email: 'admin@fitnessplatform.com',
-      fullName: 'Super Administrator',
+      fullName: 'System Administrator',
       passwordHash,
-      isSuperAdmin: true,
-      tenantUsers: {
+      role: UserRole.ADMIN,
+      profile: {
         create: {
-          tenantId: tenant.id,
-          role: UserRole.SUPER_ADMIN,
-          status: 'ACTIVE',
+          age: 30,
+          gender: Gender.MALE,
+          heightCm: 175,
+          currentWeightKg: 75,
+          targetWeightKg: 72,
+          fitnessGoal: FitnessGoal.GENERAL_FITNESS,
+          activityLevel: 'MODERATELY_ACTIVE' as any,
+          dietaryPreference: 'VEGETARIAN' as any,
+          isOnboardingCompleted: true,
         },
       },
     },
   });
-  console.log(`✅ Super Admin created: ${superAdmin.email}`);
+  console.log(`✅ Admin created: ${admin.email}`);
 
-  // 3. Seed Global Food Database (Indian & Global Staples)
+  // 2. Seed Global Food Database (Indian & Global Staples)
   const foods = [
     { name: 'Roti (Whole Wheat)', category: 'Grains', servingSize: 30, servingUnit: 'piece', calories: 80, protein: 3, carbs: 16, fat: 0.5, fiber: 2, cuisine: 'Indian', isVegetarian: true, isVegan: true },
     { name: 'White Rice (Cooked)', category: 'Grains', servingSize: 100, servingUnit: 'g', calories: 130, protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4, cuisine: 'Indian', isVegetarian: true, isVegan: true },
@@ -83,47 +67,48 @@ async function main() {
   ];
 
   for (const food of foods) {
-    await prisma.foodItem.upsert({
-      where: { id: `00000000-0000-0000-0000-${food.name.replace(/[^a-zA-Z]/g, '').slice(0, 12).padEnd(12, '0')}` },
-      update: {},
-      create: {
-        ...food,
-        isGlobal: true,
-      },
-    }).catch(async () => {
+    const existing = await prisma.foodItem.findFirst({
+      where: { name: food.name, isGlobal: true },
+    });
+    if (!existing) {
       await prisma.foodItem.create({
         data: {
           ...food,
           isGlobal: true,
         },
       });
-    });
+    }
   }
   console.log(`✅ Seeded ${foods.length} Global Food Items.`);
 
-  // 4. Seed Global Exercise Library
+  // 3. Seed Global Exercise Library
   const exercises = [
-    { name: 'Barbell Bench Press', muscleGroup: 'CHEST' as any, category: 'STRENGTH' as any, equipment: 'BARBELL' as any, difficulty: 'INTERMEDIATE' as any, instructions: ['Lie on bench', 'Lower bar to mid chest', 'Press explosively'] },
-    { name: 'Incline Dumbbell Press', muscleGroup: 'CHEST' as any, category: 'HYPERTROPHY' as any, equipment: 'DUMBBELL' as any, difficulty: 'BEGINNER' as any, instructions: ['Set bench to 30 degrees', 'Press dumbbells up with control'] },
-    { name: 'Cable Chest Fly', muscleGroup: 'CHEST' as any, category: 'HYPERTROPHY' as any, equipment: 'CABLE' as any, difficulty: 'BEGINNER' as any, instructions: ['Bring cables together in a hugging motion'] },
-    { name: 'Barbell Deadlift', muscleGroup: 'BACK' as any, category: 'STRENGTH' as any, equipment: 'BARBELL' as any, difficulty: 'ADVANCED' as any, instructions: ['Keep spine neutral', 'Hinge hips', 'Drive through heels'] },
-    { name: 'Lat Pulldown', muscleGroup: 'BACK' as any, category: 'HYPERTROPHY' as any, equipment: 'CABLE' as any, difficulty: 'BEGINNER' as any, instructions: ['Pull bar to upper chest', 'Squeeze lats'] },
-    { name: 'Barbell Back Squat', muscleGroup: 'LEGS' as any, category: 'STRENGTH' as any, equipment: 'BARBELL' as any, difficulty: 'INTERMEDIATE' as any, instructions: ['Squat to parallel', 'Keep chest high'] },
-    { name: 'Leg Press', muscleGroup: 'LEGS' as any, category: 'HYPERTROPHY' as any, equipment: 'MACHINE' as any, difficulty: 'BEGINNER' as any, instructions: ['Place feet shoulder width', 'Lower smoothly'] },
-    { name: 'Overhead Shoulder Press', muscleGroup: 'SHOULDERS' as any, category: 'STRENGTH' as any, equipment: 'BARBELL' as any, difficulty: 'INTERMEDIATE' as any, instructions: ['Press overhead without overarching back'] },
-    { name: 'Lateral Raises', muscleGroup: 'SHOULDERS' as any, category: 'HYPERTROPHY' as any, equipment: 'DUMBBELL' as any, difficulty: 'BEGINNER' as any, instructions: ['Raise arms to parallel with floor'] },
-    { name: 'Barbell Biceps Curl', muscleGroup: 'BICEPS' as any, category: 'HYPERTROPHY' as any, equipment: 'BARBELL' as any, difficulty: 'BEGINNER' as any, instructions: ['Keep elbows tucked', 'Curl bar smoothly'] },
-    { name: 'Triceps Rope Pushdown', muscleGroup: 'TRICEPS' as any, category: 'HYPERTROPHY' as any, equipment: 'CABLE' as any, difficulty: 'BEGINNER' as any, instructions: ['Extend arms fully downwards'] },
-    { name: 'Plank Hold', muscleGroup: 'CORE' as any, category: 'CALISTHENICS' as any, equipment: 'BODYWEIGHT' as any, difficulty: 'BEGINNER' as any, instructions: ['Maintain straight line from head to heels'] },
+    { name: 'Barbell Bench Press', muscleGroup: MuscleGroup.CHEST, category: ExerciseCategory.STRENGTH, equipment: Equipment.BARBELL, difficulty: Difficulty.INTERMEDIATE, instructions: ['Lie on bench', 'Lower bar to mid chest', 'Press explosively'] },
+    { name: 'Incline Dumbbell Press', muscleGroup: MuscleGroup.CHEST, category: ExerciseCategory.HYPERTROPHY, equipment: Equipment.DUMBBELL, difficulty: Difficulty.BEGINNER, instructions: ['Set bench to 30 degrees', 'Press dumbbells up with control'] },
+    { name: 'Cable Chest Fly', muscleGroup: MuscleGroup.CHEST, category: ExerciseCategory.HYPERTROPHY, equipment: Equipment.CABLE, difficulty: Difficulty.BEGINNER, instructions: ['Bring cables together in a hugging motion'] },
+    { name: 'Barbell Deadlift', muscleGroup: MuscleGroup.BACK, category: ExerciseCategory.STRENGTH, equipment: Equipment.BARBELL, difficulty: Difficulty.ADVANCED, instructions: ['Keep spine neutral', 'Hinge hips', 'Drive through heels'] },
+    { name: 'Lat Pulldown', muscleGroup: MuscleGroup.BACK, category: ExerciseCategory.HYPERTROPHY, equipment: Equipment.CABLE, difficulty: Difficulty.BEGINNER, instructions: ['Pull bar to upper chest', 'Squeeze lats'] },
+    { name: 'Barbell Back Squat', muscleGroup: MuscleGroup.LEGS, category: ExerciseCategory.STRENGTH, equipment: Equipment.BARBELL, difficulty: Difficulty.INTERMEDIATE, instructions: ['Squat to parallel', 'Keep chest high'] },
+    { name: 'Leg Press', muscleGroup: MuscleGroup.LEGS, category: ExerciseCategory.HYPERTROPHY, equipment: Equipment.MACHINE, difficulty: Difficulty.BEGINNER, instructions: ['Place feet shoulder width', 'Lower smoothly'] },
+    { name: 'Overhead Shoulder Press', muscleGroup: MuscleGroup.SHOULDERS, category: ExerciseCategory.STRENGTH, equipment: Equipment.BARBELL, difficulty: Difficulty.INTERMEDIATE, instructions: ['Press overhead without overarching back'] },
+    { name: 'Lateral Raises', muscleGroup: MuscleGroup.SHOULDERS, category: ExerciseCategory.HYPERTROPHY, equipment: Equipment.DUMBBELL, difficulty: Difficulty.BEGINNER, instructions: ['Raise arms to parallel with floor'] },
+    { name: 'Barbell Biceps Curl', muscleGroup: MuscleGroup.BICEPS, category: ExerciseCategory.HYPERTROPHY, equipment: Equipment.BARBELL, difficulty: Difficulty.BEGINNER, instructions: ['Keep elbows tucked', 'Curl bar smoothly'] },
+    { name: 'Triceps Rope Pushdown', muscleGroup: MuscleGroup.TRICEPS, category: ExerciseCategory.HYPERTROPHY, equipment: Equipment.CABLE, difficulty: Difficulty.BEGINNER, instructions: ['Extend arms fully downwards'] },
+    { name: 'Plank Hold', muscleGroup: MuscleGroup.CORE, category: ExerciseCategory.CALISTHENICS, equipment: Equipment.BODYWEIGHT, difficulty: Difficulty.BEGINNER, instructions: ['Maintain straight line from head to heels'] },
   ];
 
   for (const ex of exercises) {
-    await prisma.exercise.create({
-      data: {
-        ...ex,
-        isGlobal: true,
-      },
-    }).catch(() => {});
+    const existing = await prisma.exercise.findFirst({
+      where: { name: ex.name, isGlobal: true },
+    });
+    if (!existing) {
+      await prisma.exercise.create({
+        data: {
+          ...ex,
+          isGlobal: true,
+        },
+      });
+    }
   }
   console.log(`✅ Seeded ${exercises.length} Global Exercises.`);
 

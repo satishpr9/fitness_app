@@ -7,9 +7,9 @@ export class FoodsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Search food database (Global foods + Tenant custom foods)
+   * Search foods across global database and user's private custom foods
    */
-  async searchFoods(tenantId?: string, queryDto: FoodSearchQueryDto = {}) {
+  async searchFoods(userId?: string, queryDto: FoodSearchQueryDto = {}) {
     const {
       query,
       category,
@@ -21,10 +21,7 @@ export class FoodsService {
     } = queryDto;
 
     const where: any = {
-      OR: [
-        { isGlobal: true },
-        ...(tenantId ? [{ tenantId }] : []),
-      ],
+      OR: [{ isGlobal: true }, ...(userId ? [{ userId }] : [])],
     };
 
     if (query) {
@@ -72,14 +69,11 @@ export class FoodsService {
   /**
    * Find food item by ID
    */
-  async findOne(id: string, tenantId?: string) {
+  async findOne(id: string, userId?: string) {
     const food = await this.prisma.foodItem.findFirst({
       where: {
         id,
-        OR: [
-          { isGlobal: true },
-          ...(tenantId ? [{ tenantId }] : []),
-        ],
+        OR: [{ isGlobal: true }, ...(userId ? [{ userId }] : [])],
       },
     });
 
@@ -91,14 +85,9 @@ export class FoodsService {
   }
 
   /**
-   * Create custom food item for tenant (or global if super admin)
+   * Create custom food item (User custom or Global if admin)
    */
-  async createFood(
-    dto: CreateFoodItemDto,
-    tenantId?: string,
-    createdById?: string,
-    isGlobal = false,
-  ) {
+  async createFood(dto: CreateFoodItemDto, userId?: string, isGlobal = false) {
     return this.prisma.foodItem.create({
       data: {
         name: dto.name,
@@ -115,15 +104,14 @@ export class FoodsService {
         cuisine: dto.cuisine || 'Indian',
         isVegetarian: dto.isVegetarian ?? true,
         isVegan: dto.isVegan ?? false,
-        isGlobal: isGlobal || !tenantId,
-        tenantId: isGlobal ? null : tenantId,
-        createdById,
+        isGlobal: isGlobal || !userId,
+        userId: isGlobal ? null : userId,
       },
     });
   }
 
   /**
-   * Calculate scaled nutrition for given portion/quantity
+   * Portion nutrition scaling
    */
   calculatePortionNutrition(food: any, quantity: number, targetServingSize?: number) {
     const baseServing = food.servingSize || 100;
@@ -142,9 +130,6 @@ export class FoodsService {
     };
   }
 
-  /**
-   * Get distinct food categories
-   */
   async getCategories() {
     const categories = await this.prisma.foodItem.findMany({
       select: { category: true },
@@ -153,9 +138,6 @@ export class FoodsService {
     return categories.map((c) => c.category).filter(Boolean);
   }
 
-  /**
-   * Get distinct cuisines
-   */
   async getCuisines() {
     const cuisines = await this.prisma.foodItem.findMany({
       select: { cuisine: true },

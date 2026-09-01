@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../core/database/prisma.service';
-import { FoodRecognitionDto, LogFoodDto } from './dto/food-diary.dto';
+import { LogFoodDto } from './dto/food-diary.dto';
 import { MealType } from '@prisma/client';
 
 @Injectable()
@@ -10,12 +10,11 @@ export class FoodDiaryService {
   /**
    * Log food item to user's daily diary
    */
-  async logFood(tenantId: string, userId: string, dto: LogFoodDto) {
+  async logFood(userId: string, dto: LogFoodDto) {
     const logDate = new Date(dto.date);
 
     return this.prisma.foodLog.create({
       data: {
-        tenantId,
         userId,
         date: logDate,
         mealType: dto.mealType,
@@ -30,8 +29,6 @@ export class FoodDiaryService {
         fatG: dto.fatG,
         fiberG: dto.fiberG || 0,
         photoUrl: dto.photoUrl,
-        isAiRecognized: dto.isAiRecognized || false,
-        aiConfidenceScore: dto.aiConfidenceScore,
       },
     });
   }
@@ -39,31 +36,40 @@ export class FoodDiaryService {
   /**
    * Get daily food log breakdown and summary vs nutrition targets
    */
-  async getDailyLog(tenantId: string, userId: string, dateStr: string) {
+  async getDailyLog(userId: string, dateStr: string) {
     const date = new Date(dateStr);
 
     const [logs, target] = await Promise.all([
       this.prisma.foodLog.findMany({
         where: {
-          tenantId,
           userId,
           date,
         },
         orderBy: { loggedAt: 'asc' },
       }),
-      this.prisma.nutritionTarget.findFirst({
-        where: { tenantId, userId },
-        orderBy: { updatedAt: 'desc' },
+      this.prisma.nutritionTarget.findUnique({
+        where: { userId },
       }),
     ]);
 
-    // Group logs by meal type
-    const meals: Record<string, { items: any[]; totalCalories: number; proteinG: number; carbsG: number; fatG: number; fiberG: number }> = {
+    const meals: Record<
+      string,
+      {
+        items: any[];
+        totalCalories: number;
+        proteinG: number;
+        carbsG: number;
+        fatG: number;
+        fiberG: number;
+      }
+    > = {
       [MealType.BREAKFAST]: { items: [], totalCalories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
       [MealType.MORNING_SNACK]: { items: [], totalCalories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
       [MealType.LUNCH]: { items: [], totalCalories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
       [MealType.EVENING_SNACK]: { items: [], totalCalories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
       [MealType.DINNER]: { items: [], totalCalories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
+      [MealType.PRE_WORKOUT]: { items: [], totalCalories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
+      [MealType.POST_WORKOUT]: { items: [], totalCalories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
       [MealType.OTHER]: { items: [], totalCalories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
     };
 
@@ -131,9 +137,9 @@ export class FoodDiaryService {
   /**
    * Delete food log entry
    */
-  async deleteLog(tenantId: string, userId: string, id: string) {
+  async deleteLog(userId: string, id: string) {
     const log = await this.prisma.foodLog.findFirst({
-      where: { id, tenantId, userId },
+      where: { id, userId },
     });
 
     if (!log) {
@@ -146,26 +152,24 @@ export class FoodDiaryService {
   }
 
   /**
-   * Get weekly nutrition history
+   * Weekly history
    */
-  async getWeeklyHistory(tenantId: string, userId: string, startDateStr: string) {
+  async getWeeklyHistory(userId: string, startDateStr: string) {
     const start = new Date(startDateStr);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
 
     const logs = await this.prisma.foodLog.findMany({
       where: {
-        tenantId,
         userId,
         date: {
           gte: start,
-          lte: end,
+          lt: end,
         },
       },
       orderBy: { date: 'asc' },
     });
 
-    // Group logs by day
     const dayMap = new Map<string, { calories: number; protein: number; carbs: number; fat: number }>();
 
     for (const log of logs) {
@@ -182,41 +186,5 @@ export class FoodDiaryService {
       date,
       ...data,
     }));
-  }
-
-  /**
-   * AI Food Recognition Engine (Vision AI pipeline)
-   */
-  async recognizeFood(tenantId: string, dto: FoodRecognitionDto) {
-    // Pipeline: Vision model estimates foods, portions, and confidence scores
-    // Return structured estimates that require user confirmation before logging
-    return {
-      isEstimated: true,
-      notice: 'Nutritional values are AI estimates and must be verified by the user.',
-      detectedItems: [
-        {
-          foodName: 'Paneer Butter Masala',
-          estimatedServing: 150,
-          servingUnit: 'g',
-          confidence: 0.92,
-          calories: 380,
-          proteinG: 14,
-          carbsG: 12,
-          fatG: 30,
-          fiberG: 2.5,
-        },
-        {
-          foodName: 'Roti (Whole Wheat)',
-          estimatedServing: 2,
-          servingUnit: 'piece',
-          confidence: 0.96,
-          calories: 240,
-          proteinG: 6.2,
-          carbsG: 40,
-          fatG: 6,
-          fiberG: 4,
-        },
-      ],
-    };
   }
 }

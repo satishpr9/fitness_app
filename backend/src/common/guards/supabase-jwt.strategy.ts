@@ -2,17 +2,15 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserRole } from '@prisma/client';
+import { SubscriptionTier, UserRole } from '@prisma/client';
 
 export interface SupabaseJwtPayload {
   sub: string;
   email?: string;
   role?: string;
   app_metadata?: {
-    tenant_id?: string;
     role?: UserRole;
-    roles?: UserRole[];
-    is_super_admin?: boolean;
+    tier?: SubscriptionTier;
     [key: string]: any;
   };
   user_metadata?: {
@@ -51,10 +49,9 @@ export class SupabaseJwtStrategy extends PassportStrategy(
       userId: payload.sub,
       email: payload.email || '',
       fullName: userMeta.full_name,
-      isSuperAdmin: appMeta.is_super_admin || false,
-      tenantId: appMeta.tenant_id,
-      role: appMeta.role,
-      roles: appMeta.roles || (appMeta.role ? [appMeta.role] : []),
+      role: appMeta.role || UserRole.USER,
+      tier: appMeta.tier || SubscriptionTier.FREE,
+      isSuperAdmin: appMeta.role === UserRole.ADMIN,
       appMetadata: appMeta,
       userMetadata: userMeta,
     };
