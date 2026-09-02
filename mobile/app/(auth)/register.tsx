@@ -41,7 +41,7 @@ export default function RegisterScreen() {
     setError(null);
     setLoading(true);
     try {
-      await signUp(email.trim(), password, fullName.trim(), 'FREE');
+      await signUp(email.trim(), password, fullName.trim());
       // Direct new users into the 4-step onboarding wizard
       router.replace('/(onboarding)/step1-personal');
     } catch (err: any) {

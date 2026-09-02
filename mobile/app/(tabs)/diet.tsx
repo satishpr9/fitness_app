@@ -328,6 +328,7 @@ export default function DietScreen() {
 
       {/* Portion Selector Modal */}
       <PortionSelectorModal
+        key={`${selectedFood?.id || 'none'}-${activeMealType}`}
         visible={portionModalVisible}
         food={selectedFood}
         selectedMealType={activeMealType}

@@ -1,13 +1,23 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// Fallback to local network / machine IP
+// Resolve host IP dynamically for physical devices on WiFi, emulator, and web
 const getBaseUrl = () => {
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:3000'; // Android emulator localhost alias
+  if (Platform.OS === 'web') {
+    return 'http://localhost:3000';
   }
-  return 'http://localhost:3000';   // iOS Simulator / Web / Desktop
+
+  // When running in Expo Go on a phone, hostUri contains the computer's LAN IP
+  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    return `http://${ip}:3000`;
+  }
+
+  // Fallback to computer's current WiFi IP
+  return 'http://192.168.31.45:3000';
 };
 
 export const API_BASE_URL = getBaseUrl();

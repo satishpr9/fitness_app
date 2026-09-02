@@ -33,6 +33,7 @@ Thumbs.db
 *.swo
 
 # Temporary & Cache
+.expo/
 .turbo/
 .cache/
 coverage/

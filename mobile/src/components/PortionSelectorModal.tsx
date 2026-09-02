@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -50,10 +50,17 @@ export const PortionSelectorModal: React.FC<PortionSelectorModalProps> = ({
   onClose,
   onConfirm,
 }) => {
-  if (!food) return null;
-
   const [quantity, setQuantity] = useState<number>(1);
   const [mealType, setMealType] = useState<MealType>(selectedMealType);
+
+  useEffect(() => {
+    if (visible && selectedMealType) {
+      setMealType(selectedMealType);
+      setQuantity(1);
+    }
+  }, [visible, selectedMealType]);
+
+  if (!food) return null;
 
   // Deterministic Portion Math matching backend FoodsService
   const baseServing = food.servingSize || 100;

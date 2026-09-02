@@ -27,6 +27,10 @@ export class SignUpDto {
   @IsOptional()
   @IsEnum(UserRole)
   role?: UserRole = UserRole.USER;
+
+  @IsOptional()
+  @IsEnum(SubscriptionTier)
+  tier?: SubscriptionTier = SubscriptionTier.FREE;
 }
 
 export class SignInDto {
