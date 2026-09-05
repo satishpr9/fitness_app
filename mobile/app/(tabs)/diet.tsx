@@ -100,8 +100,10 @@ export default function DietScreen() {
 
   const handleConfirmLog = async (logData: any) => {
     try {
+      console.log('[DIET] Logging food:', JSON.stringify({ foodName: logData.foodName, mealType: logData.mealType }));
       await dietsApi.logFood(logData);
       setSearchModalVisible(false);
+      setPortionModalVisible(false);
       fetchDiary();
     } catch (err: any) {
       console.error(err);

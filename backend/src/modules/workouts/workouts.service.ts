@@ -4,11 +4,127 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../core/database/prisma.service';
 import { CreateWorkoutPlanDto } from './dto/workout.dto';
-import { PlanStatus } from '@prisma/client';
+import { Difficulty, PlanStatus } from '@prisma/client';
 
 @Injectable()
 export class WorkoutsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Create default starter plan for new users
+   */
+  async createDefaultStarterPlan(userId: string) {
+    const exercises = await this.prisma.exercise.findMany({
+      where: { isGlobal: true },
+    });
+
+    const exMap = new Map<string, string>();
+    exercises.forEach((e) => exMap.set(e.name, e.id));
+
+    const plan = await this.prisma.workoutPlan.create({
+      data: {
+        userId,
+        name: '4-Day Strength & Hypertrophy Split',
+        description: 'Balanced upper and lower body split designed for sustainable muscle growth and core stability.',
+        durationWeeks: 6,
+        difficulty: Difficulty.INTERMEDIATE,
+        goal: 'Muscle Hypertrophy',
+        status: PlanStatus.ACTIVE,
+        days: {
+          create: [
+            {
+              dayNumber: 1,
+              dayName: 'Chest & Triceps Power',
+              isRestDay: false,
+              targetDurationMinutes: 50,
+              exercises: {
+                create: [
+                  exMap.get('Barbell Bench Press')
+                    ? { exerciseId: exMap.get('Barbell Bench Press')!, orderInDay: 1, sets: 4, reps: 8, targetWeightKg: 60, restTimeSeconds: 90 }
+                    : null,
+                  exMap.get('Incline Dumbbell Press')
+                    ? { exerciseId: exMap.get('Incline Dumbbell Press')!, orderInDay: 2, sets: 3, reps: 10, targetWeightKg: 20, restTimeSeconds: 60 }
+                    : null,
+                  exMap.get('Triceps Rope Pushdown')
+                    ? { exerciseId: exMap.get('Triceps Rope Pushdown')!, orderInDay: 3, sets: 3, reps: 12, targetWeightKg: 15, restTimeSeconds: 60 }
+                    : null,
+                ].filter(Boolean) as any[],
+              },
+            },
+            {
+              dayNumber: 2,
+              dayName: 'Back & Biceps Thickness',
+              isRestDay: false,
+              targetDurationMinutes: 50,
+              exercises: {
+                create: [
+                  exMap.get('Barbell Deadlift')
+                    ? { exerciseId: exMap.get('Barbell Deadlift')!, orderInDay: 1, sets: 4, reps: 6, targetWeightKg: 80, restTimeSeconds: 120 }
+                    : null,
+                  exMap.get('Lat Pulldown')
+                    ? { exerciseId: exMap.get('Lat Pulldown')!, orderInDay: 2, sets: 3, reps: 10, targetWeightKg: 45, restTimeSeconds: 60 }
+                    : null,
+                  exMap.get('Barbell Biceps Curl')
+                    ? { exerciseId: exMap.get('Barbell Biceps Curl')!, orderInDay: 3, sets: 3, reps: 12, targetWeightKg: 20, restTimeSeconds: 60 }
+                    : null,
+                ].filter(Boolean) as any[],
+              },
+            },
+            {
+              dayNumber: 3,
+              dayName: 'Active Recovery & Core',
+              isRestDay: true,
+              targetDurationMinutes: 30,
+              exercises: {
+                create: [
+                  exMap.get('Plank Hold')
+                    ? { exerciseId: exMap.get('Plank Hold')!, orderInDay: 1, sets: 3, reps: 1, durationSeconds: 60, restTimeSeconds: 45 }
+                    : null,
+                ].filter(Boolean) as any[],
+              },
+            },
+            {
+              dayNumber: 4,
+              dayName: 'Legs & Shoulders Hypertrophy',
+              isRestDay: false,
+              targetDurationMinutes: 55,
+              exercises: {
+                create: [
+                  exMap.get('Barbell Back Squat')
+                    ? { exerciseId: exMap.get('Barbell Back Squat')!, orderInDay: 1, sets: 4, reps: 8, targetWeightKg: 70, restTimeSeconds: 90 }
+                    : null,
+                  exMap.get('Leg Press')
+                    ? { exerciseId: exMap.get('Leg Press')!, orderInDay: 2, sets: 3, reps: 10, targetWeightKg: 100, restTimeSeconds: 75 }
+                    : null,
+                  exMap.get('Overhead Shoulder Press')
+                    ? { exerciseId: exMap.get('Overhead Shoulder Press')!, orderInDay: 3, sets: 3, reps: 10, targetWeightKg: 35, restTimeSeconds: 60 }
+                    : null,
+                  exMap.get('Lateral Raises')
+                    ? { exerciseId: exMap.get('Lateral Raises')!, orderInDay: 4, sets: 3, reps: 15, targetWeightKg: 8, restTimeSeconds: 45 }
+                    : null,
+                ].filter(Boolean) as any[],
+              },
+            },
+          ],
+        },
+      },
+      include: {
+        days: {
+          orderBy: { dayNumber: 'asc' },
+          include: {
+            exercises: {
+              orderBy: { orderInDay: 'asc' },
+              include: {
+                exercise: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return plan;
+  }
 
   /**
    * Create custom workout plan
@@ -28,7 +144,7 @@ export class WorkoutsService {
           name: dto.name,
           description: dto.description,
           durationWeeks: dto.durationWeeks || 4,
-          difficulty: dto.difficulty || 'BEGINNER',
+          difficulty: dto.difficulty || Difficulty.BEGINNER,
           goal: dto.goal || 'General Fitness',
           status: dto.status || PlanStatus.DRAFT,
         },
@@ -112,18 +228,35 @@ export class WorkoutsService {
       where.status = status;
     }
 
-    const [items, total] = await Promise.all([
+    let [items, total] = await Promise.all([
       this.prisma.workoutPlan.findMany({
         where,
         take: limit,
         skip: offset,
         orderBy: { createdAt: 'desc' },
         include: {
-          _count: { select: { days: true } },
+          days: {
+            orderBy: { dayNumber: 'asc' },
+            include: {
+              exercises: {
+                orderBy: { orderInDay: 'asc' },
+                include: {
+                  exercise: true,
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.workoutPlan.count({ where }),
     ]);
+
+    // If user has no plans yet, auto-provision an active starter plan
+    if (total === 0 && !status) {
+      const defaultPlan = await this.createDefaultStarterPlan(userId);
+      items = [defaultPlan as any];
+      total = 1;
+    }
 
     return { items, total, limit, offset };
   }

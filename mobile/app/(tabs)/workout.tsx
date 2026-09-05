@@ -27,11 +27,170 @@ interface ActiveSetState {
   completed: boolean;
 }
 
+const DEFAULT_WORKOUT_PLAN: WorkoutPlan = {
+  id: 'starter-plan-1',
+  name: '4-Day Strength & Hypertrophy Split',
+  description: 'Upper / Lower body mass builder with optimal volume and progressive overload',
+  durationWeeks: 6,
+  difficulty: 'INTERMEDIATE',
+  goal: 'Muscle Hypertrophy',
+  status: 'ACTIVE',
+  createdAt: new Date().toISOString(),
+  days: [
+    {
+      id: 'd1',
+      dayNumber: 1,
+      dayName: 'Chest & Triceps Power',
+      isRestDay: false,
+      targetDurationMinutes: 50,
+      exercises: [
+        {
+          id: 'de1',
+          exerciseId: 'ex1',
+          exercise: { id: 'ex1', name: 'Barbell Bench Press', muscleGroup: 'CHEST', equipment: 'BARBELL', difficulty: 'INTERMEDIATE', category: 'STRENGTH', instructions: ['Lower bar to mid chest with control', 'Press explosively to lockout'], isGlobal: true },
+          orderInDay: 1,
+          sets: 4,
+          reps: 8,
+          targetWeightKg: 65,
+          restTimeSeconds: 90,
+        },
+        {
+          id: 'de2',
+          exerciseId: 'ex2',
+          exercise: { id: 'ex2', name: 'Incline Dumbbell Press', muscleGroup: 'CHEST', equipment: 'DUMBBELL', difficulty: 'BEGINNER', category: 'HYPERTROPHY', instructions: ['Set bench to 30 degrees', 'Press dumbbells with neutral wrist'], isGlobal: true },
+          orderInDay: 2,
+          sets: 3,
+          reps: 10,
+          targetWeightKg: 22,
+          restTimeSeconds: 60,
+        },
+        {
+          id: 'de3',
+          exerciseId: 'ex3',
+          exercise: { id: 'ex3', name: 'Triceps Rope Pushdown', muscleGroup: 'TRICEPS', equipment: 'CABLE', difficulty: 'BEGINNER', category: 'HYPERTROPHY', instructions: ['Extend arms fully downward', 'Spread rope at contraction'], isGlobal: true },
+          orderInDay: 3,
+          sets: 3,
+          reps: 12,
+          targetWeightKg: 18,
+          restTimeSeconds: 60,
+        },
+      ],
+    },
+    {
+      id: 'd2',
+      dayNumber: 2,
+      dayName: 'Back & Biceps Thickness',
+      isRestDay: false,
+      targetDurationMinutes: 50,
+      exercises: [
+        {
+          id: 'de4',
+          exerciseId: 'ex4',
+          exercise: { id: 'ex4', name: 'Barbell Deadlift', muscleGroup: 'BACK', equipment: 'BARBELL', difficulty: 'ADVANCED', category: 'STRENGTH', instructions: ['Keep spine neutral and chest up', 'Drive heels into the floor'], isGlobal: true },
+          orderInDay: 1,
+          sets: 4,
+          reps: 6,
+          targetWeightKg: 90,
+          restTimeSeconds: 120,
+        },
+        {
+          id: 'de5',
+          exerciseId: 'ex5',
+          exercise: { id: 'ex5', name: 'Lat Pulldown', muscleGroup: 'BACK', equipment: 'CABLE', difficulty: 'BEGINNER', category: 'HYPERTROPHY', instructions: ['Pull bar down to upper chest', 'Squeeze lats for 1 second'], isGlobal: true },
+          orderInDay: 2,
+          sets: 3,
+          reps: 10,
+          targetWeightKg: 50,
+          restTimeSeconds: 60,
+        },
+        {
+          id: 'de6',
+          exerciseId: 'ex6',
+          exercise: { id: 'ex6', name: 'Barbell Biceps Curl', muscleGroup: 'BICEPS', equipment: 'BARBELL', difficulty: 'BEGINNER', category: 'HYPERTROPHY', instructions: ['Keep elbows pinned to your sides', 'Curl bar up to chest level'], isGlobal: true },
+          orderInDay: 3,
+          sets: 3,
+          reps: 12,
+          targetWeightKg: 20,
+          restTimeSeconds: 60,
+        },
+      ],
+    },
+    {
+      id: 'd3',
+      dayNumber: 3,
+      dayName: 'Active Recovery & Core',
+      isRestDay: true,
+      targetDurationMinutes: 30,
+      exercises: [
+        {
+          id: 'de7',
+          exerciseId: 'ex7',
+          exercise: { id: 'ex7', name: 'Plank Hold', muscleGroup: 'CORE', equipment: 'BODYWEIGHT', difficulty: 'BEGINNER', category: 'ENDURANCE', instructions: ['Maintain rigid straight line from head to heels', 'Breathe steadily'], isGlobal: true },
+          orderInDay: 1,
+          sets: 3,
+          reps: 1,
+          durationSeconds: 60,
+          restTimeSeconds: 45,
+        },
+      ],
+    },
+    {
+      id: 'd4',
+      dayNumber: 4,
+      dayName: 'Legs & Shoulders Hypertrophy',
+      isRestDay: false,
+      targetDurationMinutes: 55,
+      exercises: [
+        {
+          id: 'de8',
+          exerciseId: 'ex8',
+          exercise: { id: 'ex8', name: 'Barbell Back Squat', muscleGroup: 'LEGS', equipment: 'BARBELL', difficulty: 'INTERMEDIATE', category: 'STRENGTH', instructions: ['Squat to parallel depth', 'Drive up while maintaining vertical torso'], isGlobal: true },
+          orderInDay: 1,
+          sets: 4,
+          reps: 8,
+          targetWeightKg: 75,
+          restTimeSeconds: 90,
+        },
+        {
+          id: 'de9',
+          exerciseId: 'ex9',
+          exercise: { id: 'ex9', name: 'Leg Press', muscleGroup: 'LEGS', equipment: 'MACHINE', difficulty: 'BEGINNER', category: 'HYPERTROPHY', instructions: ['Lower sled until knees reach 90 degrees', 'Press without locking knees'], isGlobal: true },
+          orderInDay: 2,
+          sets: 3,
+          reps: 10,
+          targetWeightKg: 110,
+          restTimeSeconds: 75,
+        },
+        {
+          id: 'de10',
+          exerciseId: 'ex10',
+          exercise: { id: 'ex10', name: 'Overhead Shoulder Press', muscleGroup: 'SHOULDERS', equipment: 'BARBELL', difficulty: 'INTERMEDIATE', category: 'STRENGTH', instructions: ['Press bar directly overhead', 'Lock out elbows at peak'], isGlobal: true },
+          orderInDay: 3,
+          sets: 3,
+          reps: 10,
+          targetWeightKg: 35,
+          restTimeSeconds: 60,
+        },
+        {
+          id: 'de11',
+          exerciseId: 'ex11',
+          exercise: { id: 'ex11', name: 'Lateral Raises', muscleGroup: 'SHOULDERS', equipment: 'DUMBBELL', difficulty: 'BEGINNER', category: 'HYPERTROPHY', instructions: ['Raise arms to shoulder height', 'Lower with 2-second eccentric'], isGlobal: true },
+          orderInDay: 4,
+          sets: 3,
+          reps: 15,
+          targetWeightKg: 8,
+          restTimeSeconds: 45,
+        },
+      ],
+    },
+  ],
+};
+
 export default function WorkoutScreen() {
-  const [plans, setPlans] = useState<WorkoutPlan[]>([]);
-  const [activePlan, setActivePlan] = useState<WorkoutPlan | null>(null);
+  const [plans, setPlans] = useState<WorkoutPlan[]>([DEFAULT_WORKOUT_PLAN]);
+  const [activePlan, setActivePlan] = useState<WorkoutPlan>(DEFAULT_WORKOUT_PLAN);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Active Logging Session Modal
@@ -43,119 +202,29 @@ export default function WorkoutScreen() {
     try {
       const res = (await workoutsApi.getWorkoutPlans()) as unknown as any;
       const items: WorkoutPlan[] = Array.isArray(res) ? res : res?.items || [];
-      setPlans(items);
-      const active = items.find((p) => p.status === 'ACTIVE') || items[0] || null;
-      setActivePlan(active);
+      setPlans(items.length > 0 ? items : [DEFAULT_WORKOUT_PLAN]);
+
+      let active = items.find((p) => p.status === 'ACTIVE') || items[0] || null;
+
+      // If active plan has no days populated, fetch detail
+      if (active && (!active.days || active.days.length === 0)) {
+        try {
+          const detailed = (await workoutsApi.getWorkoutPlan(active.id)) as unknown as WorkoutPlan;
+          if (detailed && detailed.days && detailed.days.length > 0) {
+            active = detailed;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      if (active && active.days && active.days.length > 0) {
+        setActivePlan(active);
+      } else {
+        setActivePlan(DEFAULT_WORKOUT_PLAN);
+      }
     } catch {
-      // Fallback demo plan if backend is offline
-      const demoPlan: WorkoutPlan = {
-        id: '1',
-        name: '4-Day Hypertrophy Split',
-        description: 'Upper / Lower body mass builder with optimal volume',
-        durationWeeks: 6,
-        difficulty: 'INTERMEDIATE',
-        goal: 'Muscle Hypertrophy',
-        status: 'ACTIVE',
-        createdAt: new Date().toISOString(),
-        days: [
-          {
-            id: 'd1',
-            dayNumber: 1,
-            dayName: 'Chest & Triceps Power',
-            isRestDay: false,
-            targetDurationMinutes: 50,
-            exercises: [
-              {
-                id: 'de1',
-                exerciseId: 'ex1',
-                exercise: { id: 'ex1', name: 'Barbell Bench Press', muscleGroup: 'CHEST', equipment: 'BARBELL', difficulty: 'INTERMEDIATE', category: 'STRENGTH', instructions: ['Lower bar to mid chest', 'Press explosively'], isGlobal: true },
-                orderInDay: 1,
-                sets: 4,
-                reps: 8,
-                targetWeightKg: 75,
-                restTimeSeconds: 90,
-              },
-              {
-                id: 'de2',
-                exerciseId: 'ex2',
-                exercise: { id: 'ex2', name: 'Incline Dumbbell Press', muscleGroup: 'CHEST', equipment: 'DUMBBELL', difficulty: 'BEGINNER', category: 'HYPERTROPHY', instructions: ['Set bench 30 deg', 'Press dumbbells with control'], isGlobal: true },
-                orderInDay: 2,
-                sets: 3,
-                reps: 10,
-                targetWeightKg: 24,
-                restTimeSeconds: 60,
-              },
-              {
-                id: 'de3',
-                exerciseId: 'ex3',
-                exercise: { id: 'ex3', name: 'Triceps Rope Pushdown', muscleGroup: 'TRICEPS', equipment: 'CABLE', difficulty: 'BEGINNER', category: 'HYPERTROPHY', instructions: ['Extend arms fully downward'], isGlobal: true },
-                orderInDay: 3,
-                sets: 3,
-                reps: 12,
-                targetWeightKg: 20,
-                restTimeSeconds: 60,
-              },
-            ],
-          },
-          {
-            id: 'd2',
-            dayNumber: 2,
-            dayName: 'Back & Biceps Thickness',
-            isRestDay: false,
-            targetDurationMinutes: 50,
-            exercises: [
-              {
-                id: 'de4',
-                exerciseId: 'ex4',
-                exercise: { id: 'ex4', name: 'Barbell Deadlift', muscleGroup: 'BACK', equipment: 'BARBELL', difficulty: 'ADVANCED', category: 'STRENGTH', instructions: ['Keep spine neutral', 'Drive through heels'], isGlobal: true },
-                orderInDay: 1,
-                sets: 4,
-                reps: 6,
-                targetWeightKg: 110,
-                restTimeSeconds: 120,
-              },
-              {
-                id: 'de5',
-                exerciseId: 'ex5',
-                exercise: { id: 'ex5', name: 'Lat Pulldown', muscleGroup: 'BACK', equipment: 'CABLE', difficulty: 'BEGINNER', category: 'HYPERTROPHY', instructions: ['Pull to upper chest', 'Squeeze lats'], isGlobal: true },
-                orderInDay: 2,
-                sets: 3,
-                reps: 10,
-                targetWeightKg: 55,
-                restTimeSeconds: 60,
-              },
-            ],
-          },
-          {
-            id: 'd3',
-            dayNumber: 3,
-            dayName: 'Active Recovery & Core',
-            isRestDay: true,
-            targetDurationMinutes: 30,
-            exercises: [],
-          },
-          {
-            id: 'd4',
-            dayNumber: 4,
-            dayName: 'Legs & Shoulders Hypertrophy',
-            isRestDay: false,
-            targetDurationMinutes: 55,
-            exercises: [
-              {
-                id: 'de6',
-                exerciseId: 'ex6',
-                exercise: { id: 'ex6', name: 'Barbell Back Squat', muscleGroup: 'LEGS', equipment: 'BARBELL', difficulty: 'INTERMEDIATE', category: 'STRENGTH', instructions: ['Squat to parallel', 'Keep chest high'], isGlobal: true },
-                orderInDay: 1,
-                sets: 4,
-                reps: 8,
-                targetWeightKg: 85,
-                restTimeSeconds: 90,
-              },
-            ],
-          },
-        ],
-      };
-      setActivePlan(demoPlan);
+      setActivePlan(DEFAULT_WORKOUT_PLAN);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -376,7 +445,21 @@ export default function WorkoutScreen() {
               </View>
             )}
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconBox}>
+              <Ionicons name="barbell-outline" size={48} color={Colors.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>Ready to Train?</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap below to load your personalized 4-Day Strength & Hypertrophy Split.
+            </Text>
+            <TouchableOpacity onPress={fetchWorkouts} style={styles.emptyBtn}>
+              <Ionicons name="refresh" size={18} color="#0B0F19" />
+              <Text style={styles.emptyBtnText}>Load Workout Plan</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Live Workout Session Logger Modal */}
@@ -758,5 +841,50 @@ const styles = StyleSheet.create({
   },
   checkBtnActive: {
     backgroundColor: Colors.primary,
+  },
+  emptyContainer: {
+    padding: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  emptyIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  emptyTitle: {
+    ...Typography.title2,
+    color: Colors.text,
+    marginBottom: Spacing.xs,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    ...Typography.body,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: Spacing.lg,
+    lineHeight: 22,
+  },
+  emptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.xs,
+  },
+  emptyBtnText: {
+    ...Typography.bodyBold,
+    color: '#0B0F19',
   },
 });

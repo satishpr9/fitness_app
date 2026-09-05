@@ -51,11 +51,12 @@ export const PortionSelectorModal: React.FC<PortionSelectorModalProps> = ({
   onConfirm,
 }) => {
   const [quantity, setQuantity] = useState<number>(1);
-  const [mealType, setMealType] = useState<MealType>(selectedMealType);
+  // Always use the parent's selectedMealType directly — no internal mealType state
+  // This eliminates stale state bugs where the modal remembers a previous meal type
+  const mealType = selectedMealType;
 
   useEffect(() => {
-    if (visible && selectedMealType) {
-      setMealType(selectedMealType);
+    if (visible) {
       setQuantity(1);
     }
   }, [visible, selectedMealType]);
@@ -177,22 +178,14 @@ export const PortionSelectorModal: React.FC<PortionSelectorModalProps> = ({
             ))}
           </View>
 
-          {/* Meal Type Selector */}
-          <Text style={styles.sectionLabel}>Add To Meal</Text>
+          {/* Meal Type Badge (read-only — driven by the section the user tapped '+' on) */}
+          <Text style={styles.sectionLabel}>Adding To</Text>
           <View style={styles.mealChipWrap}>
-            {MEAL_TYPES.map((m) => (
-              <TouchableOpacity
-                key={m.key}
-                onPress={() => setMealType(m.key)}
-                style={[styles.mealChip, mealType === m.key ? styles.mealChipActive : null]}
-              >
-                <Text
-                  style={[styles.mealChipText, mealType === m.key ? styles.mealChipTextActive : null]}
-                >
-                  {m.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <View style={[styles.mealChip, styles.mealChipActive]}>
+              <Text style={[styles.mealChipText, styles.mealChipTextActive]}>
+                {MEAL_TYPES.find((m) => m.key === mealType)?.label || mealType}
+              </Text>
+            </View>
           </View>
 
           {/* Confirm Action */}
