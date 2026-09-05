@@ -10,11 +10,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Rect, Circle } from 'react-native-svg';
 import { BorderRadius, Colors, Spacing, Typography } from '../../src/constants/theme';
 import { workoutsApi } from '../../src/api';
 import { WorkoutDay, WorkoutPlan } from '../../src/types';
@@ -34,54 +35,7 @@ interface ActiveSetState {
   completed: boolean;
 }
 
-// Circular progress gauge component matching the screenshot
-const CircularProgress: React.FC<{ percentage: number; size?: number; strokeWidth?: number }> = ({
-  percentage,
-  size = 62,
-  strokeWidth = 5.5,
-}) => {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const clamped = Math.min(Math.max(percentage, 0), 100);
-  const strokeDashoffset = circumference - (circumference * clamped) / 100;
-
-  return (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <Svg width={size} height={size}>
-        {/* Background track circle */}
-        <Circle
-          stroke="#252C3D"
-          fill="none"
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          strokeWidth={strokeWidth}
-        />
-        {/* Neon lime progress circle */}
-        <Circle
-          stroke="#B5FF14"
-          fill="none"
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </Svg>
-      <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={styles.circularText}>
-          {Math.round(clamped)}
-          <Text style={styles.circularPercent}>%</Text>
-        </Text>
-      </View>
-    </View>
-  );
-};
-
-// Default full workout plan matching the exact screenshot design
+// Default structured workout plan
 const DEFAULT_WORKOUT_PLAN: WorkoutPlan = {
   id: 'starter-plan-1',
   name: 'Strength Workout',
@@ -314,21 +268,22 @@ const DEFAULT_WORKOUT_PLAN: WorkoutPlan = {
 export default function WorkoutScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { width } = useWindowDimensions();
 
-  const [plans, setPlans] = useState<WorkoutPlan[]>([DEFAULT_WORKOUT_PLAN]);
   const [activePlan, setActivePlan] = useState<WorkoutPlan>(DEFAULT_WORKOUT_PLAN);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
+  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Completed exercise IDs to dynamically calculate progress matching the screenshot (3 of 8 completed = ~35%)
+  // Completed exercise tracking
   const [completedExerciseIds, setCompletedExerciseIds] = useState<string[]>([
     'ex_goblet',
     'ex_pushups',
     'ex_bench',
   ]);
 
-  // Active Logging Session Modal
+  // Live Workout Session Modal state
   const [isLoggingSession, setIsLoggingSession] = useState(false);
   const [activeSets, setActiveSets] = useState<ActiveSetState[]>([]);
   const [savingLog, setSavingLog] = useState(false);
@@ -340,11 +295,9 @@ export default function WorkoutScreen() {
     try {
       const res = (await workoutsApi.getWorkoutPlans()) as unknown as any;
       const items: WorkoutPlan[] = Array.isArray(res) ? res : res?.items || [];
-      setPlans(items.length > 0 ? items : [DEFAULT_WORKOUT_PLAN]);
 
       let active = items.find((p) => p.status === 'ACTIVE') || items[0] || null;
 
-      // If active plan has no days populated, fetch detail
       if (active && (!active.days || active.days.length === 0)) {
         try {
           const detailed = (await workoutsApi.getWorkoutPlan(active.id)) as unknown as WorkoutPlan;
@@ -352,7 +305,7 @@ export default function WorkoutScreen() {
             active = detailed;
           }
         } catch {
-          // Ignore
+          // Keep active
         }
       }
 
@@ -378,22 +331,39 @@ export default function WorkoutScreen() {
   const currentDay: WorkoutDay | undefined = activePlan?.days?.[selectedDayIndex];
 
   // Exercises list for current day
-  const exerciseItems = useMemo(() => currentDay?.exercises || [], [currentDay]);
-  const totalCount = exerciseItems.length || 8;
+  const allDayExercises = useMemo(() => currentDay?.exercises || [], [currentDay]);
+  const totalCount = allDayExercises.length;
   const completedCount = useMemo(() => {
-    return exerciseItems.filter((e) => completedExerciseIds.includes(e.exerciseId || e.id)).length;
-  }, [exerciseItems, completedExerciseIds]);
+    return allDayExercises.filter((e) => completedExerciseIds.includes(e.exerciseId || e.id)).length;
+  }, [allDayExercises, completedExerciseIds]);
 
-  // Dynamic progress percentage matching screenshot (e.g. 3/8 = ~35-37%)
-  const completionPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 35;
+  const completionPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  // Next up exercise ID (the first exercise in the list that is NOT yet completed)
+  // Muscle groups present today for clean filter tabs
+  const availableMuscles = useMemo(() => {
+    const set = new Set<string>();
+    allDayExercises.forEach((item) => {
+      if (item.exercise?.muscleGroup) {
+        set.add(item.exercise.muscleGroup.toUpperCase());
+      }
+    });
+    return Array.from(set);
+  }, [allDayExercises]);
+
+  // Filtered exercises based on selected muscle group
+  const displayedExercises = useMemo(() => {
+    if (selectedMuscleFilter === 'ALL') return allDayExercises;
+    return allDayExercises.filter(
+      (item) => item.exercise?.muscleGroup?.toUpperCase() === selectedMuscleFilter,
+    );
+  }, [allDayExercises, selectedMuscleFilter]);
+
+  // Next up exercise ID (the first uncompleted exercise)
   const nextUpExerciseId = useMemo(() => {
-    const uncompleted = exerciseItems.find((e) => !completedExerciseIds.includes(e.exerciseId || e.id));
+    const uncompleted = allDayExercises.find((e) => !completedExerciseIds.includes(e.exerciseId || e.id));
     return uncompleted ? uncompleted.exerciseId || uncompleted.id : null;
-  }, [exerciseItems, completedExerciseIds]);
+  }, [allDayExercises, completedExerciseIds]);
 
-  // Toggle exercise completion
   const toggleExerciseCompleted = (exId: string) => {
     setCompletedExerciseIds((prev) =>
       prev.includes(exId) ? prev.filter((id) => id !== exId) : [...prev, exId],
@@ -403,7 +373,6 @@ export default function WorkoutScreen() {
   const startLoggingSession = () => {
     if (!currentDay || currentDay.isRestDay) return;
 
-    // Initialize set tracking array
     const initialSets: ActiveSetState[] = [];
     currentDay.exercises.forEach((ex) => {
       for (let s = 1; s <= ex.sets; s++) {
@@ -486,62 +455,101 @@ export default function WorkoutScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* Top App Bar with Brand & User Avatar matching screenshot */}
-      <View style={styles.topAppBar}>
-        <TouchableOpacity
-          onPress={() => router.canGoBack() ? router.back() : null}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={styles.navBtn}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        {/* PulseFit Brand Logo */}
-        <View style={styles.brandContainer}>
-          <Text style={styles.brandPulse}>
-            Pulse<Text style={styles.brandFit}>Fit</Text>
-          </Text>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      {/* 1. Sleek Top Navigation Header */}
+      <View style={styles.headerBar}>
+        <View style={styles.brandRow}>
+          <View style={styles.brandLogoBox}>
+            <Ionicons name="flash" size={16} color="#0B0F19" />
+          </View>
+          <View>
+            <Text style={styles.brandTitle}>
+              PULSE<Text style={{ color: '#B5FF14' }}>FIT</Text>
+            </Text>
+            <Text style={styles.brandSubtitle}>
+              {activePlan?.name || 'Workout Program'}
+            </Text>
+          </View>
         </View>
 
-        {/* Right Actions: More Menu & Avatar */}
-        <View style={styles.headerRightActions}>
-          <TouchableOpacity style={styles.moreBtn}>
-            <Ionicons name="ellipsis-vertical" size={20} color="#FFFFFF" />
+        <View style={styles.headerRightButtons}>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => {
+              setRefreshing(true);
+              fetchWorkouts();
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="refresh" size={18} color="#94A3B8" />
           </TouchableOpacity>
-          <View style={styles.avatarCircle}>
+
+          <TouchableOpacity
+            style={styles.avatarPill}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
             <Image
               source={
                 user?.avatarUrl
                   ? { uri: user.avatarUrl }
                   : require('../../assets/exercises/hero_workout_card.jpg')
               }
-              style={styles.avatarImage}
+              style={styles.avatarThumb}
             />
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Screen Title */}
-      <Text style={styles.screenTitle}>{activePlan?.name || 'Strength Workout'}</Text>
-
-      {/* Day Split Tabs */}
-      <View style={styles.tabsWrap}>
+      {/* 2. Modern Segmented Day Selector Bar */}
+      <View style={styles.daySelectorWrapper}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.dayTabsContainer}
+          contentContainerStyle={styles.daySelectorScroll}
         >
           {activePlan?.days?.map((day, idx) => {
             const isSelected = selectedDayIndex === idx;
+            // Count completed for that day if selected
+            const isFinished =
+              isSelected && totalCount > 0 && completedCount === totalCount;
+
             return (
               <TouchableOpacity
                 key={day.id || idx}
-                onPress={() => setSelectedDayIndex(idx)}
-                style={[styles.dayTab, isSelected ? styles.dayTabActive : null]}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setSelectedDayIndex(idx);
+                  setSelectedMuscleFilter('ALL');
+                }}
+                style={[
+                  styles.dayChip,
+                  isSelected ? styles.dayChipActive : styles.dayChipInactive,
+                ]}
               >
-                <Text style={[styles.dayTabName, isSelected ? styles.dayTabNameActive : null]}>
-                  {day.dayName}
+                <View style={styles.dayChipTopRow}>
+                  <Text
+                    style={[
+                      styles.dayChipNumber,
+                      isSelected ? styles.dayChipNumberActive : null,
+                    ]}
+                  >
+                    Day {day.dayNumber || idx + 1}
+                  </Text>
+                  {isFinished ? (
+                    <Ionicons name="checkmark-circle" size={12} color="#B5FF14" />
+                  ) : isSelected ? (
+                    <View style={styles.dayActiveDot} />
+                  ) : null}
+                </View>
+
+                <Text
+                  style={[
+                    styles.dayChipLabel,
+                    isSelected ? styles.dayChipLabelActive : null,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {day.dayName.split(' ')[0]}
                 </Text>
               </TouchableOpacity>
             );
@@ -549,10 +557,10 @@ export default function WorkoutScreen() {
         </ScrollView>
       </View>
 
-      {/* Main Scroll Content */}
+      {/* Main Scrollable View */}
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.mainScroll}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -564,173 +572,365 @@ export default function WorkoutScreen() {
           />
         }
       >
-        {/* Featured Hero Workout Card matching screenshot */}
-        <View style={styles.heroCard}>
-          <Image
-            source={require('../../assets/exercises/hero_workout_card.jpg')}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+        {/* 3. High-Impact Clean Hero Overview Card */}
+        {currentDay && !currentDay.isRestDay ? (
+          <View style={styles.heroBanner}>
+            {/* Background Athlete Artwork */}
+            <Image
+              source={require('../../assets/exercises/hero_workout_card.jpg')}
+              style={styles.heroBannerImage}
+              resizeMode="cover"
+            />
 
-          <View style={styles.heroContent}>
-            {/* Top Row: Title & Circular Gauge */}
-            <View style={styles.heroTopRow}>
-              <View style={{ flex: 1, paddingRight: Spacing.xs }}>
-                <Text style={styles.heroTitle} numberOfLines={2}>
-                  {currentDay?.dayName || 'Full Body Strength'}
+            {/* Gradient Dark Vignette */}
+            <Svg style={StyleSheet.absoluteFill}>
+              <Defs>
+                <SvgLinearGradient id="heroGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%" stopColor="#0B0F19" stopOpacity="0.82" />
+                  <Stop offset="50%" stopColor="#0B0F19" stopOpacity="0.70" />
+                  <Stop offset="100%" stopColor="#0B0F19" stopOpacity="0.94" />
+                </SvgLinearGradient>
+              </Defs>
+              <Rect width="100%" height="100%" fill="url(#heroGrad)" />
+            </Svg>
+
+            <View style={styles.heroBannerContent}>
+              {/* Top Tag & Difficulty */}
+              <View style={styles.heroTopMetaRow}>
+                <View style={styles.heroTagBadge}>
+                  <Text style={styles.heroTagBadgeText}>
+                    WEEK 1 • DAY {currentDay.dayNumber || selectedDayIndex + 1}
+                  </Text>
+                </View>
+                <View style={styles.heroDifficultyBadge}>
+                  <Ionicons name="stats-chart" size={11} color="#B5FF14" />
+                  <Text style={styles.heroDifficultyText}>
+                    {activePlan?.difficulty || 'Intermediate'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Day Routine Title */}
+              <Text style={styles.heroMainTitle} numberOfLines={2}>
+                {currentDay.dayName}
+              </Text>
+
+              {/* 3 Clean Metric Badges */}
+              <View style={styles.metricBadgesRow}>
+                <View style={styles.metricItem}>
+                  <Ionicons name="time-outline" size={14} color="#B5FF14" />
+                  <Text style={styles.metricValue}>
+                    {currentDay.targetDurationMinutes || 45} <Text style={styles.metricUnit}>min</Text>
+                  </Text>
+                </View>
+
+                <View style={styles.metricDivider} />
+
+                <View style={styles.metricItem}>
+                  <Ionicons name="flame" size={14} color="#FF7A00" />
+                  <Text style={styles.metricValue}>
+                    320 <Text style={styles.metricUnit}>kcal</Text>
+                  </Text>
+                </View>
+
+                <View style={styles.metricDivider} />
+
+                <View style={styles.metricItem}>
+                  <Ionicons name="barbell-outline" size={14} color="#38BDF8" />
+                  <Text style={styles.metricValue}>
+                    {totalCount} <Text style={styles.metricUnit}>moves</Text>
+                  </Text>
+                </View>
+              </View>
+
+              {/* Integrated Progress Bar */}
+              <View style={styles.heroProgressSection}>
+                <View style={styles.heroProgressLabels}>
+                  <Text style={styles.heroProgressSummary}>
+                    {completedCount} of {totalCount} completed
+                  </Text>
+                  <Text style={styles.heroProgressPercent}>{completionPercentage}%</Text>
+                </View>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.max(completionPercentage, 4)}%` },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              {/* Start / Resume Session Button */}
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={startLoggingSession}
+                style={styles.startSessionButton}
+              >
+                <Ionicons name="play" size={16} color="#0B0F19" />
+                <Text style={styles.startSessionButtonText}>
+                  {completedCount > 0 && completedCount < totalCount
+                    ? 'Resume Workout Session'
+                    : 'Start Workout Session'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#0B0F19" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Rest Day State */}
+        {currentDay && currentDay.isRestDay ? (
+          <View style={styles.restDayCard}>
+            <View style={styles.restDayIconBox}>
+              <Ionicons name="leaf-outline" size={36} color="#38BDF8" />
+            </View>
+            <Text style={styles.restDayTitle}>Active Recovery Day</Text>
+            <Text style={styles.restDayBody}>
+              Rest and recovery is when muscle protein synthesis occurs. Focus on
+              hydration, light stretching, and hitting your target macros today.
+            </Text>
+            <View style={styles.recoveryTipBox}>
+              <Ionicons name="water" size={18} color="#38BDF8" />
+              <Text style={styles.recoveryTipText}>
+                Aim for at least 2.5L of clean water and 8 hours of sleep.
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* 4. Filter Tabs & Exercise List Section */}
+        {currentDay && !currentDay.isRestDay ? (
+          <View style={styles.exercisesSection}>
+            {/* Section Header with count */}
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionHeading}>Exercise Routine</Text>
+                <Text style={styles.sectionSub}>
+                  Tap 3D Form button to learn proper biomechanics
                 </Text>
               </View>
-              <CircularProgress percentage={completionPercentage} size={60} strokeWidth={5.5} />
             </View>
 
-            {/* Meta Row: Intermediate • 45 min • 320 kcal */}
-            <View style={styles.heroMetaRow}>
-              <View style={styles.metaItem}>
-                <Ionicons name="bar-chart" size={13} color="#B5FF14" />
-                <Text style={styles.metaText}>{activePlan?.difficulty || 'Intermediate'}</Text>
-              </View>
-              <Text style={styles.metaDot}>•</Text>
-              <View style={styles.metaItem}>
-                <Ionicons name="time-outline" size={13} color="#B5FF14" />
-                <Text style={styles.metaText}>{currentDay?.targetDurationMinutes || 45} min</Text>
-              </View>
-              <Text style={styles.metaDot}>•</Text>
-              <View style={styles.metaItem}>
-                <Ionicons name="flame" size={13} color="#FF7A00" />
-                <Text style={styles.metaText}>320 kcal</Text>
-              </View>
-            </View>
-
-            {/* Big Neon Lime Action Button */}
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={startLoggingSession}
-              style={styles.heroActionBtn}
-            >
-              <Ionicons name="play" size={16} color="#0B0F19" />
-              <Text style={styles.heroActionBtnText}>
-                {completedCount > 0 && completedCount < totalCount ? 'Resume Workout' : 'Start Workout'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Today's Workout Section Header matching screenshot */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Today's Workout</Text>
-          <Text style={styles.sectionSubtitle}>
-            {completedCount} of {totalCount} exercises completed
-          </Text>
-
-          {/* Horizontal Progress Bar */}
-          <View style={styles.progressBarTrack}>
-            <View style={[styles.progressBarFill, { width: `${completionPercentage}%` }]} />
-          </View>
-        </View>
-
-        {/* Exercises List Cards matching screenshot */}
-        {currentDay ? (
-          <View style={styles.exercisesList}>
-            {currentDay.exercises?.map((item, exIdx) => {
-              const exIdentifier = item.exerciseId || item.id;
-              const isCompleted = completedExerciseIds.includes(exIdentifier);
-              const isNextUp = nextUpExerciseId === exIdentifier;
-              const imageSource =
-                EXERCISE_3D_ASSETS[item.exercise?.name || ''] ||
-                EXERCISE_3D_ASSETS['Goblet Squat'] ||
-                EXERCISE_3D_ASSETS['Barbell Back Squat'];
-
-              return (
+            {/* Muscle Group Filter Chips */}
+            {availableMuscles.length > 1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterRow}
+              >
                 <TouchableOpacity
-                  key={item.id || exIdx}
-                  activeOpacity={0.85}
-                  onPress={() =>
-                    setGuideExercise({
-                      name: item.exercise?.name || 'Exercise',
-                      muscleGroup: item.exercise?.muscleGroup,
-                    })
-                  }
+                  onPress={() => setSelectedMuscleFilter('ALL')}
                   style={[
-                    styles.exerciseCard,
-                    isNextUp ? styles.exerciseCardNextUp : null,
+                    styles.filterChip,
+                    selectedMuscleFilter === 'ALL' ? styles.filterChipActive : null,
                   ]}
                 >
-                  {/* Left 3D Exercise Image Thumbnail */}
-                  <View style={styles.exerciseThumbBox}>
-                    <Image source={imageSource} style={styles.exerciseThumbImage} resizeMode="cover" />
-                  </View>
-
-                  {/* Middle Info: Name & Sets x Reps */}
-                  <View style={styles.exerciseInfo}>
-                    <Text style={styles.exerciseNameText} numberOfLines={1}>
-                      {item.exercise?.name}
-                    </Text>
-                    <Text style={styles.exerciseMetaText}>
-                      {item.sets} sets × {item.durationSeconds ? `${item.durationSeconds} sec` : `${item.reps || 12} reps`}
-                    </Text>
-                  </View>
-
-                  {/* Right Status Action */}
-                  {isCompleted ? (
-                    <TouchableOpacity
-                      onPress={() => toggleExerciseCompleted(exIdentifier)}
-                      style={styles.completedBadge}
-                    >
-                      <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  ) : isNextUp ? (
-                    <View style={styles.nextUpWrapper}>
-                      <View style={styles.nextUpBadge}>
-                        <Text style={styles.nextUpText}>Next up</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      onPress={() => toggleExerciseCompleted(exIdentifier)}
-                      style={{ padding: 4 }}
-                    >
-                      <Ionicons name="chevron-forward" size={20} color="#64748B" />
-                    </TouchableOpacity>
-                  )}
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      selectedMuscleFilter === 'ALL' ? styles.filterChipTextActive : null,
+                    ]}
+                  >
+                    All ({allDayExercises.length})
+                  </Text>
                 </TouchableOpacity>
-              );
-            })}
+
+                {availableMuscles.map((muscle) => {
+                  const count = allDayExercises.filter(
+                    (e) => e.exercise?.muscleGroup?.toUpperCase() === muscle,
+                  ).length;
+                  const isActive = selectedMuscleFilter === muscle;
+                  return (
+                    <TouchableOpacity
+                      key={muscle}
+                      onPress={() => setSelectedMuscleFilter(muscle)}
+                      style={[styles.filterChip, isActive ? styles.filterChipActive : null]}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          isActive ? styles.filterChipTextActive : null,
+                        ]}
+                      >
+                        {muscle} ({count})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            {/* Clean Exercise Cards List */}
+            <View style={styles.cardsStack}>
+              {displayedExercises.map((item, index) => {
+                const exId = item.exerciseId || item.id;
+                const isCompleted = completedExerciseIds.includes(exId);
+                const isNextUp = nextUpExerciseId === exId;
+                const imageSource =
+                  EXERCISE_3D_ASSETS[item.exercise?.name || ''] ||
+                  EXERCISE_3D_ASSETS['Goblet Squat'] ||
+                  EXERCISE_3D_ASSETS['Barbell Back Squat'];
+
+                return (
+                  <View
+                    key={item.id || index}
+                    style={[
+                      styles.cleanCard,
+                      isCompleted ? styles.cleanCardCompleted : null,
+                      isNextUp && !isCompleted ? styles.cleanCardNextUp : null,
+                    ]}
+                  >
+                    {/* Left 3D Thumbnail with overlay */}
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() =>
+                        setGuideExercise({
+                          name: item.exercise?.name || 'Exercise',
+                          muscleGroup: item.exercise?.muscleGroup,
+                        })
+                      }
+                      style={styles.thumbWrapper}
+                    >
+                      <Image
+                        source={imageSource}
+                        style={styles.exerciseImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.thumb3DBadge}>
+                        <Ionicons name="cube-outline" size={10} color="#00E5FF" />
+                        <Text style={styles.thumb3DText}>3D</Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Middle Info Column */}
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        setGuideExercise({
+                          name: item.exercise?.name || 'Exercise',
+                          muscleGroup: item.exercise?.muscleGroup,
+                        })
+                      }
+                      style={styles.cardInfo}
+                    >
+                      {/* Muscle & Next Up Badges */}
+                      <View style={styles.cardBadgesRow}>
+                        <View style={styles.muscleBadge}>
+                          <Text style={styles.muscleBadgeText}>
+                            {item.exercise?.muscleGroup || 'STRENGTH'}
+                          </Text>
+                        </View>
+                        {isNextUp && !isCompleted && (
+                          <View style={styles.nextUpPill}>
+                            <Text style={styles.nextUpPillText}>Next up</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Title */}
+                      <Text style={styles.cardTitle} numberOfLines={1}>
+                        {item.exercise?.name}
+                      </Text>
+
+                      {/* Reps & Sets Details */}
+                      <View style={styles.cardSpecsRow}>
+                        <Text style={styles.cardSpecHighlight}>
+                          {item.sets} Sets
+                        </Text>
+                        <Text style={styles.cardSpecDot}>•</Text>
+                        <Text style={styles.cardSpecMuted}>
+                          {item.durationSeconds
+                            ? `${item.durationSeconds}s hold`
+                            : `${item.reps || 12} reps`}
+                        </Text>
+                        {!!item.targetWeightKg && item.targetWeightKg > 0 && (
+                          <>
+                            <Text style={styles.cardSpecDot}>•</Text>
+                            <Text style={styles.cardSpecMuted}>{item.targetWeightKg} kg</Text>
+                          </>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Right Interactive Actions */}
+                    <View style={styles.cardRightActions}>
+                      {/* Quick 3D Form Modal trigger */}
+                      <TouchableOpacity
+                        activeOpacity={0.75}
+                        onPress={() =>
+                          setGuideExercise({
+                            name: item.exercise?.name || 'Exercise',
+                            muscleGroup: item.exercise?.muscleGroup,
+                          })
+                        }
+                        style={styles.form3DBtn}
+                      >
+                        <Ionicons name="eye-outline" size={15} color="#38BDF8" />
+                        <Text style={styles.form3DBtnText}>Form</Text>
+                      </TouchableOpacity>
+
+                      {/* Completion Toggle Circle */}
+                      <TouchableOpacity
+                        activeOpacity={0.75}
+                        onPress={() => toggleExerciseCompleted(exId)}
+                        style={[
+                          styles.checkTarget,
+                          isCompleted ? styles.checkTargetCompleted : null,
+                        ]}
+                      >
+                        <Ionicons
+                          name={isCompleted ? 'checkmark' : 'checkmark-outline'}
+                          size={18}
+                          color={isCompleted ? '#0B0F19' : '#64748B'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           </View>
-        ) : (
+        ) : null}
+
+        {/* Empty State when no days exist */}
+        {!currentDay && (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconBox}>
-              <Ionicons name="barbell-outline" size={48} color="#B5FF14" />
+              <Ionicons name="barbell-outline" size={42} color="#B5FF14" />
             </View>
             <Text style={styles.emptyTitle}>Ready to Train?</Text>
             <Text style={styles.emptySubtitle}>
-              Tap below to load your personalized Strength Workout plan.
+              Your personalized strength and conditioning routine is ready to begin.
             </Text>
             <TouchableOpacity onPress={fetchWorkouts} style={styles.emptyBtn}>
               <Ionicons name="refresh" size={18} color="#0B0F19" />
-              <Text style={styles.emptyBtnText}>Load Workout Plan</Text>
+              <Text style={styles.emptyBtnText}>Load Workout Routine</Text>
             </TouchableOpacity>
           </View>
         )}
       </ScrollView>
 
-      {/* Live Workout Session Logger Modal */}
+      {/* 5. Live Workout Logging Modal */}
       <Modal visible={isLoggingSession} animationType="slide">
         <SafeAreaView style={styles.loggerModal}>
           <View style={styles.loggerHeader}>
-            <TouchableOpacity onPress={() => setIsLoggingSession(false)}>
-              <Ionicons name="close" size={24} color={Colors.text} />
+            <TouchableOpacity
+              onPress={() => setIsLoggingSession(false)}
+              style={styles.loggerCloseBtn}
+            >
+              <Ionicons name="close" size={22} color="#FFFFFF" />
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={styles.loggerTitle}>{currentDay?.dayName}</Text>
               <Text style={styles.loggerSubtitle}>Live Performance Logging</Text>
             </View>
             <TouchableOpacity onPress={finishWorkoutSession} disabled={savingLog}>
-              <Text style={styles.doneBtnText}>Finish</Text>
+              <Text style={styles.loggerDoneText}>Finish</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: Spacing.md }}>
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
             {currentDay?.exercises?.map((ex, exIdx) => {
               const setsForEx = activeSets.filter((s) => s.exerciseId === ex.exerciseId);
 
@@ -754,13 +954,13 @@ export default function WorkoutScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Table Header */}
+                  {/* Table Column Headers */}
                   <View style={styles.tableHeader}>
-                    <Text style={[styles.colHeader, { width: 40 }]}>SET</Text>
+                    <Text style={[styles.colHeader, { width: 44 }]}>SET</Text>
                     <Text style={[styles.colHeader, { flex: 1 }]}>KG</Text>
                     <Text style={[styles.colHeader, { flex: 1 }]}>REPS</Text>
                     <Text style={[styles.colHeader, { width: 50 }]}>RPE</Text>
-                    <Text style={[styles.colHeader, { width: 40 }]}>DONE</Text>
+                    <Text style={[styles.colHeader, { width: 44 }]}>DONE</Text>
                   </View>
 
                   {setsForEx.map((s) => (
@@ -768,41 +968,48 @@ export default function WorkoutScreen() {
                       key={s.setNumber}
                       style={[styles.tableRow, s.completed ? styles.tableRowDone : null]}
                     >
-                      <Text style={[styles.setNumText, { width: 40 }]}>{s.setNumber}</Text>
+                      <Text style={[styles.setNumText, { width: 44 }]}>{s.setNumber}</Text>
 
-                      {/* Weight Input */}
                       <TextInput
                         value={s.weightKg}
-                        onChangeText={(val) => updateSetValue(s.exerciseId, s.setNumber, 'weightKg', val)}
+                        onChangeText={(val) =>
+                          updateSetValue(s.exerciseId, s.setNumber, 'weightKg', val)
+                        }
                         keyboardType="decimal-pad"
                         style={styles.tableInput}
                       />
 
-                      {/* Reps Input */}
                       <TextInput
                         value={s.repsCompleted}
-                        onChangeText={(val) => updateSetValue(s.exerciseId, s.setNumber, 'repsCompleted', val)}
+                        onChangeText={(val) =>
+                          updateSetValue(s.exerciseId, s.setNumber, 'repsCompleted', val)
+                        }
                         keyboardType="number-pad"
                         style={styles.tableInput}
                       />
 
-                      {/* RPE Rating Input */}
                       <TextInput
                         value={String(s.rpeRating)}
-                        onChangeText={(val) => updateSetValue(s.exerciseId, s.setNumber, 'rpeRating', parseInt(val) || 8)}
+                        onChangeText={(val) =>
+                          updateSetValue(
+                            s.exerciseId,
+                            s.setNumber,
+                            'rpeRating',
+                            parseInt(val) || 8,
+                          )
+                        }
                         keyboardType="number-pad"
-                        style={[styles.tableInput, { width: 45 }]}
+                        style={[styles.tableInput, { width: 50 }]}
                       />
 
-                      {/* Checkbox */}
                       <TouchableOpacity
                         onPress={() => toggleSetCompleted(s.exerciseId, s.setNumber)}
-                        style={[styles.checkBtn, s.completed ? styles.checkBtnActive : null]}
+                        style={[styles.setCheckBtn, s.completed ? styles.setCheckBtnActive : null]}
                       >
                         <Ionicons
                           name={s.completed ? 'checkmark' : 'ellipse-outline'}
                           size={18}
-                          color={s.completed ? '#0B0F19' : Colors.textMuted}
+                          color={s.completed ? '#0B0F19' : '#64748B'}
                         />
                       </TouchableOpacity>
                     </View>
@@ -816,13 +1023,13 @@ export default function WorkoutScreen() {
               onPress={finishWorkoutSession}
               loading={savingLog}
               size="lg"
-              style={{ marginTop: Spacing.lg, marginBottom: Spacing.xl }}
+              style={{ marginTop: 16, marginBottom: 40 }}
             />
           </ScrollView>
         </SafeAreaView>
       </Modal>
 
-      {/* 3D Anatomical Step-by-Step Exercise Visual Guide */}
+      {/* 6. Interactive 3D Step-by-Step Anatomical Guide */}
       <Exercise3DGuideModal
         visible={!!guideExercise}
         exerciseName={guideExercise?.name || ''}
@@ -836,378 +1043,622 @@ export default function WorkoutScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0A0D14',
+    backgroundColor: '#0B0F19',
   },
   center: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Top Navigation Bar
-  topAppBar: {
+
+  // 1. Sleek Top Bar
+  headerBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
-  navBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  brandContainer: {
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
-  brandPulse: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-  },
-  brandFit: {
-    fontSize: 22,
-    fontWeight: '900',
-    fontStyle: 'italic',
-    color: '#B5FF14',
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  moreBtn: {
+  brandLogoBox: {
     width: 32,
     height: 32,
+    borderRadius: 10,
+    backgroundColor: '#B5FF14',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarCircle: {
+  brandTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  brandSubtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  headerRightButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#151D2F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  avatarPill: {
     width: 34,
     height: 34,
     borderRadius: 17,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: '#B5FF14',
   },
-  avatarImage: {
+  avatarThumb: {
     width: '100%',
     height: '100%',
   },
-  // Screen Sub-Header Title
-  screenTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: Spacing.xs,
-  },
-  // Tabs row
-  tabsWrap: {
+
+  // 2. Modern Segmented Day Selector Bar
+  daySelectorWrapper: {
     paddingVertical: 6,
-    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
-  dayTabsContainer: {
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.xs,
+  daySelectorScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
   },
-  dayTab: {
-    paddingVertical: 6,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: '#151924',
+  dayChip: {
+    width: 80,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: '#121826',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    justifyContent: 'center',
   },
-  dayTabActive: {
-    backgroundColor: 'rgba(181, 255, 20, 0.15)',
+  dayChipActive: {
+    backgroundColor: '#192236',
     borderColor: '#B5FF14',
   },
-  dayTabName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8E9BAE',
-  },
-  dayTabNameActive: {
-    color: '#B5FF14',
-    fontWeight: '700',
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.xl * 2,
-  },
-  // Hero Workout Card
-  heroCard: {
-    flexDirection: 'row',
-    backgroundColor: '#141722',
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-  },
-  heroImage: {
-    width: 125,
-    height: 160,
-  },
-  heroContent: {
-    flex: 1,
-    padding: Spacing.md,
-    justifyContent: 'space-between',
-  },
-  heroTopRow: {
+  dayChipInactive: {},
+  dayChipTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  heroTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    lineHeight: 22,
-  },
-  circularText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  circularPercent: {
-    fontSize: 10,
-    color: '#A0AEC0',
-    fontWeight: '700',
-  },
-  heroMetaRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginVertical: 4,
+    marginBottom: 2,
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  metaText: {
+  dayChipNumber: {
     fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  dayChipNumberActive: {
+    color: '#B5FF14',
+  },
+  dayActiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#B5FF14',
+  },
+  dayChipLabel: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#94A3B8',
   },
-  metaDot: {
-    fontSize: 12,
-    color: '#64748B',
+  dayChipLabelActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  heroActionBtn: {
+
+  // Main Scrollable Area
+  mainScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 40,
+  },
+
+  // 3. Hero Overview Card
+  heroBanner: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#141A28',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  heroBannerImage: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.45,
+  },
+  heroBannerContent: {
+    padding: 18,
+  },
+  heroTopMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  heroTagBadge: {
+    backgroundColor: 'rgba(181, 255, 20, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(181, 255, 20, 0.3)',
+  },
+  heroTagBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B5FF14',
+    letterSpacing: 0.8,
+  },
+  heroDifficultyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(11, 15, 25, 0.65)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  heroDifficultyText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#E2E8F0',
+  },
+  heroMainTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    lineHeight: 28,
+    marginBottom: 12,
+  },
+  metricBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(11, 15, 25, 0.75)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  metricItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#B5FF14',
-    paddingVertical: 9,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.md,
     gap: 6,
-    marginTop: 6,
   },
-  heroActionBtnText: {
+  metricValue: {
     fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  metricUnit: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  metricDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  heroProgressSection: {
+    marginBottom: 14,
+  },
+  heroProgressLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  heroProgressSummary: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  heroProgressPercent: {
+    fontSize: 12,
+    color: '#B5FF14',
+    fontWeight: '800',
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: '#1E293B',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#B5FF14',
+    borderRadius: 3,
+  },
+  startSessionButton: {
+    backgroundColor: '#B5FF14',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 46,
+    borderRadius: 12,
+    gap: 8,
+  },
+  startSessionButtonText: {
+    fontSize: 14,
     fontWeight: '800',
     color: '#0B0F19',
     letterSpacing: 0.3,
   },
-  // Today's Workout Section Header
-  sectionHeader: {
-    marginBottom: Spacing.md,
+
+  // Rest Day View
+  restDayCard: {
+    backgroundColor: '#131826',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.2)',
+    marginBottom: 20,
   },
-  sectionTitle: {
+  restDayIconBox: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  restDayTitle: {
     fontSize: 20,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginBottom: 2,
+    marginBottom: 8,
   },
-  sectionSubtitle: {
+  restDayBody: {
     fontSize: 13,
-    fontWeight: '500',
-    color: '#8E9BAE',
-    marginBottom: Spacing.xs,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
   },
-  progressBarTrack: {
-    height: 6,
-    width: '100%',
-    backgroundColor: '#1E2432',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginTop: 4,
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#B5FF14',
-    borderRadius: 3,
-  },
-  // Exercises List
-  exercisesList: {
-    gap: Spacing.sm,
-  },
-  exerciseCard: {
+  recoveryTipBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#151924',
+    gap: 8,
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.2)',
+  },
+  recoveryTipText: {
+    fontSize: 12,
+    color: '#38BDF8',
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+
+  // 4. Exercise Section & Filter
+  exercisesSection: {
+    marginTop: 4,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  sectionHeading: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  sectionSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  filterRow: {
+    gap: 8,
+    marginBottom: 14,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#141A28',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  filterChipActive: {
+    backgroundColor: 'rgba(181, 255, 20, 0.12)',
+    borderColor: '#B5FF14',
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8E9BAE',
+  },
+  filterChipTextActive: {
+    color: '#B5FF14',
+    fontWeight: '700',
+  },
+
+  // Cards List
+  cardsStack: {
+    gap: 10,
+  },
+  cleanCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#131826',
     borderRadius: 16,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  exerciseCardNextUp: {
-    borderColor: '#1D64F2',
-    backgroundColor: '#131828',
+  cleanCardCompleted: {
+    borderColor: 'rgba(181, 255, 20, 0.2)',
+    backgroundColor: '#121926',
   },
-  exerciseThumbBox: {
-    width: 52,
-    height: 52,
+  cleanCardNextUp: {
+    borderColor: '#38BDF8',
+    backgroundColor: '#131D2E',
+  },
+  thumbWrapper: {
+    width: 60,
+    height: 60,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#202636',
-    marginRight: Spacing.md,
+    backgroundColor: '#1C2333',
+    marginRight: 12,
+    position: 'relative',
   },
-  exerciseThumbImage: {
+  exerciseImage: {
     width: '100%',
     height: '100%',
   },
-  exerciseInfo: {
+  thumb3DBadge: {
+    position: 'absolute',
+    bottom: 3,
+    left: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(11, 15, 25, 0.85)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    gap: 2,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 229, 255, 0.4)',
+  },
+  thumb3DText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#00E5FF',
+  },
+  cardInfo: {
     flex: 1,
     justifyContent: 'center',
   },
-  exerciseNameText: {
-    fontSize: 15,
+  cardBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  muscleBadge: {
+    backgroundColor: '#1C2333',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  muscleBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  nextUpPill: {
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  nextUpPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  cardTitle: {
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 3,
+    marginBottom: 4,
   },
-  exerciseMetaText: {
-    fontSize: 12,
-    color: '#8E9BAE',
-    fontWeight: '500',
-  },
-  completedBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#84CC16',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  nextUpWrapper: {
+  cardSpecsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  nextUpBadge: {
-    backgroundColor: '#1D64F2',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  nextUpText: {
-    color: '#FFFFFF',
+  cardSpecHighlight: {
     fontSize: 11,
     fontWeight: '700',
+    color: '#B5FF14',
   },
-  // Empty state
+  cardSpecDot: {
+    fontSize: 10,
+    color: '#475569',
+  },
+  cardSpecMuted: {
+    fontSize: 11,
+    color: '#8E9BAE',
+    fontWeight: '500',
+  },
+  cardRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 6,
+  },
+  form3DBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 3,
+  },
+  form3DBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#38BDF8',
+  },
+  checkTarget: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1E2536',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  checkTargetCompleted: {
+    backgroundColor: '#B5FF14',
+    borderColor: '#B5FF14',
+  },
+
+  // Empty State
   emptyContainer: {
-    padding: Spacing.xl,
+    padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#151924',
-    borderRadius: BorderRadius.lg,
-    marginTop: Spacing.lg,
+    backgroundColor: '#131826',
+    borderRadius: 18,
+    marginTop: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   emptyIconBox: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: 'rgba(181, 255, 20, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 14,
   },
   emptyTitle: {
-    ...Typography.title2,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 6,
     textAlign: 'center',
   },
   emptySubtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
+    fontSize: 13,
+    color: '#94A3B8',
     textAlign: 'center',
-    marginBottom: Spacing.lg,
-    lineHeight: 22,
+    marginBottom: 20,
+    lineHeight: 20,
   },
   emptyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#B5FF14',
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.full,
-    gap: Spacing.xs,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    gap: 6,
   },
   emptyBtnText: {
-    ...Typography.bodyBold,
+    fontSize: 13,
+    fontWeight: '800',
     color: '#0B0F19',
   },
-  // Logger Modal
+
+  // 5. Live Workout Logger Modal
   loggerModal: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#0B0F19',
   },
   loggerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  loggerCloseBtn: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loggerTitle: {
-    ...Typography.title3,
-    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   loggerSubtitle: {
-    ...Typography.tiny,
-    color: Colors.purple,
+    fontSize: 11,
+    color: '#B5FF14',
+    fontWeight: '600',
   },
-  doneBtnText: {
-    ...Typography.bodyBold,
+  loggerDoneText: {
+    fontSize: 14,
+    fontWeight: '800',
     color: '#B5FF14',
   },
   logExCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
+    backgroundColor: '#131826',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   logExHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 10,
   },
   logExName: {
-    ...Typography.bodyBold,
-    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   mini3DBtn: {
     flexDirection: 'row',
@@ -1217,7 +1668,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 229, 255, 0.35)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
+    borderRadius: 6,
     gap: 4,
   },
   mini3DBtnText: {
@@ -1228,52 +1679,56 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: Spacing.xs,
+    paddingBottom: 6,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    gap: Spacing.xs,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 8,
   },
   colHeader: {
-    ...Typography.tiny,
-    color: Colors.textMuted,
+    fontSize: 10,
+    color: '#64748B',
     fontWeight: '700',
     textAlign: 'center',
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.xs,
-    gap: Spacing.xs,
+    paddingVertical: 6,
+    gap: 8,
   },
   tableRowDone: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   setNumText: {
-    ...Typography.captionBold,
-    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
     textAlign: 'center',
   },
   tableInput: {
     flex: 1,
     height: 36,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: '#1A2133',
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.sm,
-    color: Colors.text,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 8,
+    color: '#FFFFFF',
     textAlign: 'center',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
-  checkBtn: {
+  setCheckBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: '#1A2133',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  checkBtnActive: {
+  setCheckBtnActive: {
     backgroundColor: '#B5FF14',
+    borderColor: '#B5FF14',
   },
 });
