@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   RefreshControl,
   ScrollView,
@@ -17,6 +18,10 @@ import { BorderRadius, Colors, Spacing, Typography } from '../../src/constants/t
 import { workoutsApi } from '../../src/api';
 import { WorkoutDay, WorkoutPlan } from '../../src/types';
 import { Button } from '../../src/components/Button';
+import {
+  Exercise3DGuideModal,
+  EXERCISE_3D_ASSETS,
+} from '../../src/components/Exercise3DGuideModal';
 
 interface ActiveSetState {
   exerciseId: string;
@@ -197,6 +202,9 @@ export default function WorkoutScreen() {
   const [isLoggingSession, setIsLoggingSession] = useState(false);
   const [activeSets, setActiveSets] = useState<ActiveSetState[]>([]);
   const [savingLog, setSavingLog] = useState(false);
+
+  // 3D Visual Step-by-Step Guide Modal
+  const [guideExercise, setGuideExercise] = useState<{ name: string; muscleGroup?: string } | null>(null);
 
   const fetchWorkouts = async () => {
     try {
@@ -417,6 +425,36 @@ export default function WorkoutScreen() {
               <View style={styles.exercisesList}>
                 {currentDay.exercises?.map((item, exIdx) => (
                   <View key={item.id || exIdx} style={styles.exerciseCard}>
+                    {/* 3D Visual Anatomical Preview Banner */}
+                    {EXERCISE_3D_ASSETS[item.exercise?.name || ''] && (
+                      <TouchableOpacity
+                        activeOpacity={0.88}
+                        onPress={() =>
+                          setGuideExercise({
+                            name: item.exercise?.name || 'Exercise',
+                            muscleGroup: item.exercise?.muscleGroup,
+                          })
+                        }
+                        style={styles.card3DBanner}
+                      >
+                        <Image
+                          source={EXERCISE_3D_ASSETS[item.exercise?.name || '']}
+                          style={styles.card3DImage}
+                          resizeMode="cover"
+                        />
+                        <View style={styles.card3DOverlay}>
+                          <View style={styles.badge3DMini}>
+                            <Ionicons name="cube-outline" size={11} color="#0B0F19" />
+                            <Text style={styles.badge3DMiniText}>3D ANATOMY</Text>
+                          </View>
+                          <View style={styles.learnStepsPill}>
+                            <Text style={styles.learnStepsText}>3 Steps Guide</Text>
+                            <Ionicons name="chevron-forward" size={12} color="#00E5FF" />
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+
                     <View style={styles.exHeader}>
                       <View style={styles.orderBadge}>
                         <Text style={styles.orderText}>{exIdx + 1}</Text>
@@ -440,6 +478,21 @@ export default function WorkoutScreen() {
                         </Text>
                       </View>
                     )}
+
+                    {/* Interactive 3D Step-by-Step Guide Trigger */}
+                    <TouchableOpacity
+                      onPress={() =>
+                        setGuideExercise({
+                          name: item.exercise?.name || 'Exercise',
+                          muscleGroup: item.exercise?.muscleGroup,
+                        })
+                      }
+                      style={styles.view3DBtn}
+                    >
+                      <Ionicons name="cube-outline" size={15} color="#00E5FF" />
+                      <Text style={styles.view3DBtnText}>Learn 3D Step-by-Step Form</Text>
+                      <Ionicons name="arrow-forward" size={14} color="#00E5FF" />
+                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
@@ -484,9 +537,23 @@ export default function WorkoutScreen() {
 
               return (
                 <View key={ex.id || exIdx} style={styles.logExCard}>
-                  <Text style={styles.logExName}>
-                    {exIdx + 1}. {ex.exercise?.name}
-                  </Text>
+                  <View style={styles.logExHeaderRow}>
+                    <Text style={styles.logExName}>
+                      {exIdx + 1}. {ex.exercise?.name}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setGuideExercise({
+                          name: ex.exercise?.name || 'Exercise',
+                          muscleGroup: ex.exercise?.muscleGroup,
+                        })
+                      }
+                      style={styles.mini3DBtn}
+                    >
+                      <Ionicons name="cube-outline" size={13} color="#00E5FF" />
+                      <Text style={styles.mini3DBtnText}>3D Form</Text>
+                    </TouchableOpacity>
+                  </View>
 
                   {/* Table Header */}
                   <View style={styles.tableHeader}>
@@ -555,6 +622,14 @@ export default function WorkoutScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* 3D Anatomical Step-by-Step Exercise Visual Guide */}
+      <Exercise3DGuideModal
+        visible={!!guideExercise}
+        exerciseName={guideExercise?.name || ''}
+        muscleGroup={guideExercise?.muscleGroup}
+        onClose={() => setGuideExercise(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -886,5 +961,97 @@ const styles = StyleSheet.create({
   emptyBtnText: {
     ...Typography.bodyBold,
     color: '#0B0F19',
+  },
+  card3DBanner: {
+    height: 140,
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+    backgroundColor: '#050811',
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.2)',
+  },
+  card3DImage: {
+    width: '100%',
+    height: '100%',
+  },
+  card3DOverlay: {
+    position: 'absolute',
+    bottom: Spacing.xs,
+    left: Spacing.xs,
+    right: Spacing.xs,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badge3DMini: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00E5FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    gap: 4,
+  },
+  badge3DMiniText: {
+    color: '#0B0F19',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  learnStepsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(11, 15, 25, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.4)',
+  },
+  learnStepsText: {
+    color: '#00E5FF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  view3DBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.35)',
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.sm,
+    gap: 6,
+  },
+  view3DBtnText: {
+    color: '#00E5FF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  logExHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  mini3DBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    gap: 4,
+  },
+  mini3DBtnText: {
+    color: '#00E5FF',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
