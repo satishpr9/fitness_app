@@ -15,20 +15,20 @@ import { Button } from './Button';
 
 const { width } = Dimensions.get('window');
 
-// 3D Visual Asset Mapping
+// 3D Visual Asset Mapping — Every exercise has its own unique 3D visual render!
 export const EXERCISE_3D_ASSETS: Record<string, any> = {
   'Barbell Bench Press': require('../../assets/exercises/bench_press_3d.jpg'),
-  'Incline Dumbbell Press': require('../../assets/exercises/bench_press_3d.jpg'),
-  'Cable Chest Fly': require('../../assets/exercises/bench_press_3d.jpg'),
-  'Triceps Rope Pushdown': require('../../assets/exercises/bench_press_3d.jpg'),
-  'Barbell Back Squat': require('../../assets/exercises/squat_3d.jpg'),
-  'Leg Press': require('../../assets/exercises/squat_3d.jpg'),
+  'Incline Dumbbell Press': require('../../assets/exercises/incline_dumbbell_press_3d.jpg'),
+  'Triceps Rope Pushdown': require('../../assets/exercises/triceps_pushdown_3d.jpg'),
   'Barbell Deadlift': require('../../assets/exercises/deadlift_3d.jpg'),
-  'Plank Hold': require('../../assets/exercises/deadlift_3d.jpg'),
   'Lat Pulldown': require('../../assets/exercises/lat_pulldown_3d.jpg'),
-  'Barbell Biceps Curl': require('../../assets/exercises/lat_pulldown_3d.jpg'),
+  'Barbell Biceps Curl': require('../../assets/exercises/biceps_curl_3d.jpg'),
+  'Plank Hold': require('../../assets/exercises/plank_hold_3d.jpg'),
+  'Barbell Back Squat': require('../../assets/exercises/squat_3d.jpg'),
+  'Leg Press': require('../../assets/exercises/leg_press_3d.jpg'),
   'Overhead Shoulder Press': require('../../assets/exercises/shoulder_press_3d.jpg'),
-  'Lateral Raises': require('../../assets/exercises/shoulder_press_3d.jpg'),
+  'Lateral Raises': require('../../assets/exercises/lateral_raise_3d.jpg'),
+  'Cable Chest Fly': require('../../assets/exercises/incline_dumbbell_press_3d.jpg'),
 };
 
 interface StepGuide {
@@ -75,32 +75,59 @@ const DEFAULT_GUIDES: Record<string, ExerciseDetails> = {
     proTip: 'Keep your shoulder blades retracted throughout the entire repetition to maximize chest stretch and protect your rotator cuffs.',
     avoidMistake: 'Bouncing the barbell off your sternum or lifting your hips off the bench.',
   },
-  'Barbell Back Squat': {
-    primaryMuscles: ['Quadriceps (95%)', 'Gluteus Maximus (90%)'],
-    secondaryMuscles: ['Hamstrings', 'Spinal Erectors', 'Core'],
-    equipment: 'Barbell & Squat Rack',
+  'Incline Dumbbell Press': {
+    primaryMuscles: ['Clavicular Upper Pectorals (94%)', 'Anterior Deltoid'],
+    secondaryMuscles: ['Triceps Brachii', 'Serratus Anterior'],
+    equipment: 'Incline Bench (30°) & Dumbbells',
     steps: [
       {
-        title: 'Bar Placement & Stance',
-        badge: 'Step 1: Unrack',
-        description: 'Rest bar across upper traps (high bar) or rear deltoids (low bar). Step back, set feet shoulder-width apart, toes flared outward 15–30 degrees.',
-        biomechanicCue: 'Take a deep diaphragmatic breath into your belly and brace 360° core.',
+        title: 'Bench Angle & Kick-Up',
+        badge: 'Step 1: Setup',
+        description: 'Set bench to 30 degrees. Sit back and kick dumbbells up with your knees to shoulder height. Plant feet flat, pull shoulder blades together.',
+        biomechanicCue: 'Angle dumbbells slightly at 45 degrees rather than straight parallel to reduce shoulder strain.',
       },
       {
-        title: 'Hips Back & Knees Out',
-        badge: 'Step 2: Descent',
-        description: 'Initiate by unlocking hips and knees simultaneously. Push knees outward in line with your toes while lowering torso until hips drop below parallel (crease below kneecap).',
-        biomechanicCue: 'Maintain vertical chest angle and keep heels glued to platform.',
+        title: 'Deep Upper Chest Stretch',
+        badge: 'Step 2: Lower',
+        description: 'Lower dumbbells down and out with control until your thumbs align with upper chest. Feel a rich, deep stretch across the upper pectorals.',
+        biomechanicCue: 'Take 2–3 seconds on the eccentric descent with forearms perpendicular to floor.',
       },
       {
-        title: 'Floor Drive & Extension',
-        badge: 'Step 3: Ascent',
-        description: 'Drive mid-foot straight through the floor. Push hips forward and chest upward at the same rate until standing tall with knees and hips fully extended.',
-        biomechanicCue: 'Exhale past your sticking point and squeeze glutes at the top.',
+        title: 'Converging Press',
+        badge: 'Step 3: Converge',
+        description: 'Press dumbbells up and inward along a slight arc without clanking them together at top. Squeeze upper chest hard at peak.',
+        biomechanicCue: 'Stop just short of elbow hyperextension to maintain continuous muscular tension.',
       },
     ],
-    proTip: 'Think about spreading the floor apart with your feet to activate your hip abductors and prevent knee cave.',
-    avoidMistake: 'Letting knees collapse inward (valgus) or rounding your lower lumbar spine at the bottom (butt wink).',
+    proTip: 'Do not set the bench higher than 30–45 degrees; any steeper shifts tension away from the upper chest onto the front delts.',
+    avoidMistake: 'Letting elbows flare straight out at 90 degrees or clanking the dumbbells violently at the peak.',
+  },
+  'Triceps Rope Pushdown': {
+    primaryMuscles: ['Triceps Lateral Head (95%)', 'Triceps Long Head'],
+    secondaryMuscles: ['Medial Head', 'Forearms'],
+    equipment: 'High Cable Pulley & Rope Attachment',
+    steps: [
+      {
+        title: 'Anchor & Elbow Pinning',
+        badge: 'Step 1: Anchor',
+        description: 'Grip rope handles, hinge slightly forward at hips (10°). Glue elbows firmly against the sides of your ribcage and keep them stationary.',
+        biomechanicCue: 'Shoulders locked down away from ears; wrists in neutral alignment.',
+      },
+      {
+        title: 'Downward Drive & Spread',
+        badge: 'Step 2: Push',
+        description: 'Extend forearms downward while keeping upper arms frozen. At bottom, flare and spread the rope ends apart outwards past your hips.',
+        biomechanicCue: 'Focus entirely on elbow hinge mechanics without moving your torso.',
+      },
+      {
+        title: 'Peak Squeeze & Stretch',
+        badge: 'Step 3: Squeeze',
+        description: 'Lock out triceps for a full 1-second peak contraction. Control the return until forearms reach just past parallel (90 degrees).',
+        biomechanicCue: 'Exhale as you press and maintain steady eccentric resistance.',
+      },
+    ],
+    proTip: 'Spreading the rope at the bottom recruits maximum fibers in the lateral and long heads of your triceps.',
+    avoidMistake: 'Letting your elbows swing forward like a pendulum or using shoulder momentum to press down.',
   },
   'Barbell Deadlift': {
     primaryMuscles: ['Gluteus Maximus (95%)', 'Hamstrings', 'Spinal Erectors (95%)'],
@@ -156,6 +183,114 @@ const DEFAULT_GUIDES: Record<string, ExerciseDetails> = {
     proTip: 'Use a thumbless (hook) grip to minimize forearm/bicep involvement and channel maximum tension directly into your lats.',
     avoidMistake: 'Leaning excessively backwards using momentum or pulling the bar behind your neck.',
   },
+  'Barbell Biceps Curl': {
+    primaryMuscles: ['Biceps Brachii (95%)', 'Brachialis'],
+    secondaryMuscles: ['Brachioradialis', 'Forearm Flexors'],
+    equipment: 'Olympic Barbell or EZ-Curl Bar',
+    steps: [
+      {
+        title: 'Stance & Supinated Grip',
+        badge: 'Step 1: Stance',
+        description: 'Stand with feet hip-width, grip barbell shoulder-width with palms facing up. Pin upper arms tight against ribs and brace abdominal wall.',
+        biomechanicCue: 'Roll shoulders back and squeeze shoulder blades lightly together.',
+      },
+      {
+        title: 'Curling Arc & Contraction',
+        badge: 'Step 2: Curl',
+        description: 'Keeping upper arms frozen, contract biceps to curl bar upwards toward collarbones along a smooth circular arc.',
+        biomechanicCue: 'Squeeze the bar hard to increase neural drive into the biceps peak.',
+      },
+      {
+        title: 'Eccentric Negative',
+        badge: 'Step 3: Negative',
+        description: 'Lower bar under 2–3 second resistance until arms reach full extension at bottom. Reset and inhale before next rep.',
+        biomechanicCue: 'Do not rock your torso backward to fling the bar up.',
+      },
+    ],
+    proTip: 'Keep your wrists straight or slightly flexed down throughout the curl to keep tension on the biceps rather than the forearm flexors.',
+    avoidMistake: 'Swinging your hips and torso backward to use momentum on the upward motion.',
+  },
+  'Plank Hold': {
+    primaryMuscles: ['Rectus Abdominis (95%)', 'Transverse Abdominis'],
+    secondaryMuscles: ['Obliques', 'Gluteus Medius', 'Shoulder Stabilizers'],
+    equipment: 'Exercise Mat',
+    steps: [
+      {
+        title: 'Forearm Base & Alignment',
+        badge: 'Step 1: Setup',
+        description: 'Rest on forearms with elbows placed directly below shoulders. Extend legs straight back with toes planted on floor hip-width apart.',
+        biomechanicCue: 'Maintain neutral neck by gazing at floor between your hands.',
+      },
+      {
+        title: 'Total Body Tension',
+        badge: 'Step 2: Brace',
+        description: 'Tuck pelvis slightly (posterior pelvic tilt), flex glutes hard, pull kneecaps up, and draw belly button in towards your spine.',
+        biomechanicCue: 'Form a laser-straight horizontal line from heels to ears.',
+      },
+      {
+        title: 'Static Hold & Breathing',
+        badge: 'Step 3: Hold',
+        description: 'Maintain intense muscular isometric contraction without letting hips sag or pike up. Take shallow, controlled diaphragmatic breaths.',
+        biomechanicCue: 'Actively pull elbows towards toes on the floor to amplify core contraction.',
+      },
+    ],
+    proTip: 'Actively pulling your elbows toward your toes creates an intense abdominal vacuum contraction that doubles the core stimulus.',
+    avoidMistake: 'Letting your lower back sag towards the floor, which compresses the lumbar vertebrae.',
+  },
+  'Barbell Back Squat': {
+    primaryMuscles: ['Quadriceps (95%)', 'Gluteus Maximus (90%)'],
+    secondaryMuscles: ['Hamstrings', 'Spinal Erectors', 'Core'],
+    equipment: 'Barbell & Squat Rack',
+    steps: [
+      {
+        title: 'Bar Placement & Stance',
+        badge: 'Step 1: Unrack',
+        description: 'Rest bar across upper traps (high bar) or rear deltoids (low bar). Step back, set feet shoulder-width apart, toes flared outward 15–30 degrees.',
+        biomechanicCue: 'Take a deep diaphragmatic breath into your belly and brace 360° core.',
+      },
+      {
+        title: 'Hips Back & Knees Out',
+        badge: 'Step 2: Descent',
+        description: 'Initiate by unlocking hips and knees simultaneously. Push knees outward in line with your toes while lowering torso until hips drop below parallel (crease below kneecap).',
+        biomechanicCue: 'Maintain vertical chest angle and keep heels glued to platform.',
+      },
+      {
+        title: 'Floor Drive & Extension',
+        badge: 'Step 3: Ascent',
+        description: 'Drive mid-foot straight through the floor. Push hips forward and chest upward at the same rate until standing tall with knees and hips fully extended.',
+        biomechanicCue: 'Exhale past your sticking point and squeeze glutes at the top.',
+      },
+    ],
+    proTip: 'Think about spreading the floor apart with your feet to activate your hip abductors and prevent knee cave.',
+    avoidMistake: 'Letting knees collapse inward (valgus) or rounding your lower lumbar spine at the bottom (butt wink).',
+  },
+  'Leg Press': {
+    primaryMuscles: ['Quadriceps (95%)', 'Gluteus Maximus'],
+    secondaryMuscles: ['Adductors', 'Hamstrings', 'Calves'],
+    equipment: '45-Degree Incline Leg Press Machine',
+    steps: [
+      {
+        title: 'Back & Foot Placement',
+        badge: 'Step 1: Seat',
+        description: 'Sit back with tailbone firmly pressed against back pad. Place feet shoulder-width in center of platform, toes pointed slightly outward.',
+        biomechanicCue: 'Grip the side stabilization handles tightly to lock hips down.',
+      },
+      {
+        title: 'Controlled Knee Flexion',
+        badge: 'Step 2: Lower',
+        description: 'Release safety locks. Slowly lower sled until knees reach approximately 90 degrees without letting lower back lift off the pad.',
+        biomechanicCue: 'Keep knees tracking directly over your middle toes.',
+      },
+      {
+        title: 'Platform Press & Soft Lock',
+        badge: 'Step 3: Press',
+        description: 'Drive through entire foot to push sled back up. Stop just short of locking your knee joints to protect knees and keep quads loaded.',
+        biomechanicCue: 'Never completely hyperextend or snap knees straight at peak.',
+      },
+    ],
+    proTip: 'Placing feet lower on the platform emphasizes the quadriceps, while placing them higher shifts more load to glutes and hamstrings.',
+    avoidMistake: 'Allowing your lower back to curl off the seat pad at the bottom, which risks disc compression.',
+  },
   'Overhead Shoulder Press': {
     primaryMuscles: ['Anterior & Lateral Deltoids (90%)'],
     secondaryMuscles: ['Triceps Brachii', 'Upper Pectorals', 'Trapezius'],
@@ -182,6 +317,33 @@ const DEFAULT_GUIDES: Record<string, ExerciseDetails> = {
     ],
     proTip: 'Squeezing your glutes and quads as hard as possible creates a solid kinetic chain that adds immediate pressing power.',
     avoidMistake: 'Arching your lower back backward into an incline bench position to compensate for heavy weight.',
+  },
+  'Lateral Raises': {
+    primaryMuscles: ['Lateral Deltoids (98%)'],
+    secondaryMuscles: ['Anterior Deltoids', 'Trapezius', 'Forearms'],
+    equipment: 'Pair of Dumbbells',
+    steps: [
+      {
+        title: 'Slight Forward Hinge',
+        badge: 'Step 1: Setup',
+        description: 'Hold dumbbells at sides with palms facing inward. Hinge forward 5–10 degrees at hips to align with the scapular plane.',
+        biomechanicCue: 'Keep a soft bend in your elbows throughout the entire movement.',
+      },
+      {
+        title: 'Lead with Elbows to Parallel',
+        badge: 'Step 2: Raise',
+        description: 'Raise dumbbells out to sides until elbows reach shoulder height. Lead with elbows as if pouring water from two pitchers at the top.',
+        biomechanicCue: 'Keep pinkies slightly higher than thumbs for peak side delt activation.',
+      },
+      {
+        title: 'Slow Controlled Descent',
+        badge: 'Step 3: Negative',
+        description: 'Lower weights smoothly over 2–3 seconds against gravity. Stop just before dumbbells touch thighs to preserve tension.',
+        biomechanicCue: 'Do not shrug your neck or traps during the lift.',
+      },
+    ],
+    proTip: 'Think about pushing the dumbbells outward toward the walls rather than pulling them upward to bypass trap recruitment.',
+    avoidMistake: 'Using heavy weight and bouncing your knees or swinging your torso to fling the dumbbells upward.',
   },
 };
 
