@@ -29,6 +29,10 @@ export const EXERCISE_3D_ASSETS: Record<string, any> = {
   'Overhead Shoulder Press': require('../../assets/exercises/shoulder_press_3d.jpg'),
   'Lateral Raises': require('../../assets/exercises/lateral_raise_3d.jpg'),
   'Cable Chest Fly': require('../../assets/exercises/incline_dumbbell_press_3d.jpg'),
+  'Goblet Squat': require('../../assets/exercises/goblet_squat_3d.jpg'),
+  'Push-ups': require('../../assets/exercises/bench_press_3d.jpg'),
+  'Dumbbell Row': require('../../assets/exercises/lat_pulldown_3d.jpg'),
+  'Reverse Lunges': require('../../assets/exercises/squat_3d.jpg'),
 };
 
 interface StepGuide {

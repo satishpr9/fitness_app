@@ -11,7 +11,7 @@ export default function IndexScreen() {
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
-        router.replace('/(auth)/login');
+        router.replace('/(auth)/welcome');
       } else if (!isOnboardingCompleted) {
         router.replace('/(onboarding)/step1-personal');
       } else {
